@@ -75,11 +75,34 @@ Endpoints:
 - `GET /tools` → list of registered tool names
 - `POST /tools/exa` → register Exa at runtime if not auto-registered
 - `POST /search` → run a query through the chosen tool
+- `GET /trend` → get trending Hugging Face papers without configuring tools
 
 Request/response models are defined in `search/api.py`.
 
 
 #### Response shape
+Example: `GET /trend`
+
+```bash
+curl -s "http://127.0.0.1:8000/trend?period=weekly&end_date=2025-10-17&days=7&limit=20" | jq
+```
+
+Query params:
+- `period`: one of `daily` | `weekly` | `monthly` (default: `daily`)
+- `date`: ISO date `YYYY-MM-DD` (for `daily`)
+- `end_date`: ISO date to end the trailing window (for `weekly`/`monthly`)
+- `days`: window size override (`weekly` default 7, `monthly` default 30)
+- `limit`: truncate results to first N
+
+Response shape:
+
+```json
+{
+  "period": "weekly",
+  "count": 20,
+  "results": [ { "title": "...", "authors": ["..."], "publishedAt": "..." } ]
+}
+```
 
 `POST /search` responds with:
 

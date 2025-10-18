@@ -7,6 +7,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .paper_search import ResearchPaperSearcher
+from .hugging_face_paper import (
+    fetch_daily_papers,
+    fetch_weekly_papers,
+    fetch_monthly_papers,
+)
 
 
 app = FastAPI(title="Sam Paper Search API", version="0.1.0")
@@ -113,6 +118,53 @@ def search(req: SearchRequest) -> SearchResponse:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+
+@app.get("/trend")
+def trend(
+    period: str = "daily",
+    date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    days: Optional[int] = None,
+    limit: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Return trending Hugging Face papers without configuring tools.
+
+    Query params:
+      - period: one of 'daily' | 'weekly' | 'monthly' (default: daily)
+      - date: ISO date YYYY-MM-DD (for daily)
+      - end_date: ISO date to end the trailing window (weekly/monthly)
+      - days: window size override (weekly default 7, monthly default 30)
+      - limit: truncate results to first N
+    """
+    try:
+        period_value = (period or "").lower()
+        if period_value not in {"daily", "weekly", "monthly"}:
+            raise HTTPException(status_code=400, detail="Invalid period. Use 'daily', 'weekly', or 'monthly'.")
+
+        if period_value == "daily":
+            results = fetch_daily_papers(date=date)
+        elif period_value == "weekly":
+            kwargs: Dict[str, Any] = {}
+            if end_date is not None:
+                kwargs["end_date"] = end_date
+            if days is not None:
+                kwargs["days"] = days
+            results = fetch_weekly_papers(**kwargs)
+        else:
+            kwargs2: Dict[str, Any] = {}
+            if end_date is not None:
+                kwargs2["end_date"] = end_date
+            if days is not None:
+                kwargs2["days"] = days
+            results = fetch_monthly_papers(**kwargs2)
+
+        if limit is not None and limit >= 0:
+            results = results[:limit]
+        return {"period": period_value, "count": len(results), "results": results}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 if __name__ == "__main__":
     import uvicorn
