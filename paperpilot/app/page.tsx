@@ -17,12 +17,44 @@ export default function HomePage() {
   const recs = useStore((state) => state.recs);
   const [query, setQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState<any[]>([]);
+  const [trending, setTrending] = useState<Paper[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   
   useEffect(() => {
     setIsHydrated(true);
+  }, []);
+
+  // Prefetch trending stack for home tinder section
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/trend', { cache: 'no-store' })
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelled) return;
+        const items = Array.isArray(json?.results) ? json.results : [];
+        if (items.length === 0) return;
+        const mapped: Paper[] = items.map((it: any, idx: number) => {
+          const authorsRaw = it?.authors || [];
+          const authors = Array.isArray(authorsRaw)
+            ? authorsRaw.map((a: any) => (typeof a === 'string' ? a : a?.name || '')).filter(Boolean)
+            : (typeof authorsRaw === 'string' ? [authorsRaw] : []);
+          const id = it?.paper?.id || it?.paperId || it?.id || `trend-${Date.now()}-${idx}`;
+          return {
+            id: String(id),
+            title: it?.title || it?.paper?.title || 'Untitled',
+            authors,
+            summary2: it?.summary || it?.highlights || it?.paper?.summary || '',
+            labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 5) : [],
+            venue: it?.venue || undefined,
+            year: it?.year || undefined,
+          } as Paper;
+        });
+        setTrending(mapped);
+      })
+      .catch(() => {})
+    return () => { cancelled = true; };
   }, []);
   
   // Simple local search with mock external results when no local matches
@@ -57,11 +89,7 @@ export default function HomePage() {
         const res = await fetch('/api/search', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            query,
-            tool: 'exa',
-            tool_kwargs: { count: 2 },
-          }),
+          body: JSON.stringify({ query, limit: 10 }),
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -104,7 +132,7 @@ export default function HomePage() {
       .filter((p): p is Paper => Boolean(p && !(p.folderId || p.projectId)));
   }, []);
 
-  const feedToShow = tinderFeed.length > 0 ? tinderFeed : fallbackFeed;
+  const feedToShow = (trending && trending.length > 0) ? trending : (tinderFeed.length > 0 ? tinderFeed : fallbackFeed);
 
   if (!isHydrated) {
     return (
@@ -169,6 +197,7 @@ export default function HomePage() {
                   const summary = r?.summary || r?.highlights || paper?.summary || paper?.highlights || '';
                   const links = r?.links || paper?.links || {};
                   const primaryUrl = links?.arxiv || links?.huggingface || links?.source || links?.pdf || links?.github;
+                  const provider = r?.provider || paper?.provider || '';
                   return (
                     <div key={r?.id || r?.paperId || paper?.id || idx} className="p-3 rounded-lg bg-secondary">
                       <div className="font-medium flex items-center gap-2">
@@ -180,6 +209,9 @@ export default function HomePage() {
                         >
                           {title}
                         </a>
+                        {provider && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/60 text-muted-foreground uppercase tracking-wide">{provider}</span>
+                        )}
                       </div>
                       {authors.length > 0 && (
                         <div className="text-xs text-muted-foreground mt-0.5">{authors.join(', ')}</div>

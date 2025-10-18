@@ -11,9 +11,10 @@ import { DecisionModal } from './decision-modal';
 
 interface SwipeDeckProps {
   papers: Paper[];
+  onIndexChange?: (index: number, total: number) => void;
 }
 
-export function SwipeDeck({ papers }: SwipeDeckProps) {
+export function SwipeDeck({ papers, onIndexChange }: SwipeDeckProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modalPaper, setModalPaper] = useState<Paper | null>(null);
   const swipe = useStore((state) => state.swipe);
@@ -37,10 +38,18 @@ export function SwipeDeck({ papers }: SwipeDeckProps) {
     }
   };
 
+  const notifyIndex = (nextIndex: number) => {
+    if (onIndexChange) onIndexChange(nextIndex, papers.length);
+  };
+
   const handleNo = () => {
     if (!currentPaper) return;
     swipe(currentPaper.id, 'skip');
-    setCurrentIndex((prev) => prev + 1);
+    setCurrentIndex((prev) => {
+      const next = prev + 1;
+      notifyIndex(next);
+      return next;
+    });
     x.set(0);
   };
 
@@ -51,7 +60,11 @@ export function SwipeDeck({ papers }: SwipeDeckProps) {
 
   const handleModalClose = () => {
     setModalPaper(null);
-    setCurrentIndex((prev) => prev + 1);
+    setCurrentIndex((prev) => {
+      const next = prev + 1;
+      notifyIndex(next);
+      return next;
+    });
     x.set(0);
   };
 

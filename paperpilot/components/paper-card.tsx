@@ -84,6 +84,16 @@ export function PaperCard({ paper, mode = 'compact', onClick }: PaperCardProps) 
                 {paper.summary2}
               </p>
             )}
+            {/* Extra badges for trending info if available via labels */}
+            {paper.labels && paper.labels.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {paper.labels.map((label, idx) => (
+                  <Badge key={idx} variant="secondary" className="text-xs">
+                    {label}
+                  </Badge>
+                ))}
+              </div>
+            )}
 
             {/* Labels */}
             {paper.labels && paper.labels.length > 0 && (

@@ -9,7 +9,11 @@ import { useMemo, useEffect, useState, useCallback } from 'react';
 import { mockPapers, mockRecommendations } from '@/lib/mock';
 import type { Paper } from '@/lib/types';
 
-export default function TinderPage() {
+interface TinderViewProps {
+  initialTrending: Paper[];
+}
+
+export default function TinderView({ initialTrending }: TinderViewProps) {
   const router = useRouter();
   const papers = useStore((state) => state.papers);
   const recs = useStore((state) => state.recs);
@@ -18,46 +22,9 @@ export default function TinderPage() {
   const [trendError, setTrendError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Always fetch trending items for swipe deck as a fallback feed
-    let cancelled = false;
-    setLoadingTrend(true);
-    setTrendError(null);
-    fetch('/api/trend', { cache: 'no-store' })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(await r.text());
-        return r.json();
-      })
-      .then((json) => {
-        if (cancelled) return;
-        const items = Array.isArray(json?.results) ? json.results : [];
-        const mapped: Paper[] = items.map((it: any, idx: number) => {
-          const authorsRaw = it?.authors || [];
-          const authors = Array.isArray(authorsRaw)
-            ? authorsRaw.map((a: any) => (typeof a === 'string' ? a : a?.name || '')).filter(Boolean)
-            : (typeof authorsRaw === 'string' ? [authorsRaw] : []);
-          const id = it?.paper?.id || it?.paperId || it?.id || `trend-${idx}`;
-          return {
-            id: String(id),
-            title: it?.title || it?.paper?.title || 'Untitled',
-            authors,
-            summary2: it?.summary || it?.highlights || it?.paper?.summary || '',
-            labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 5) : [],
-            venue: it?.venue || undefined,
-            year: it?.year || undefined,
-          } as Paper;
-        });
-        setTrending(mapped);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setTrendError(String(e?.message || e));
-      })
-      .finally(() => !cancelled && setLoadingTrend(false));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  
+    setTrending(initialTrending || []);
+  }, [initialTrending]);
+
   const tinderFeed = useMemo(() => {
     const tinderRecs = recs
       .filter((r) => (r.source === 'tinder' || r.source === 'hot'))
@@ -81,14 +48,15 @@ export default function TinderPage() {
 
   // Choose feed priority: trending (fresh) > tinder recs > fallback
   const feedToShow = (trending && trending.length > 0) ? trending : (tinderFeed.length > 0 ? tinderFeed : fallbackFeed);
+  const feedSource = (trending && trending.length > 0) ? 'Trending' : (tinderFeed.length > 0 ? 'Recommendations' : 'Mock');
 
   // When user progresses past 50% of current feed, prefetch more trending
   const handleIndexChange = useCallback((index: number, total: number) => {
     if (total === 0) return;
     const progress = index / total;
     if (progress >= 0.5 && !loadingTrend) {
-      // Trigger background refresh of trending list
-      fetch('/api/trend', { cache: 'no-store' })
+      setLoadingTrend(true);
+      fetch('/api/trend')
         .then(async (r) => (r.ok ? r.json() : null))
         .then((json) => {
           const items = Array.isArray(json?.results) ? json.results : [];
@@ -104,17 +72,17 @@ export default function TinderPage() {
               title: it?.title || it?.paper?.title || 'Untitled',
               authors,
               summary2: it?.summary || it?.highlights || it?.paper?.summary || '',
-              labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 5) : [],
+              labels: [],
               venue: it?.venue || undefined,
               year: it?.year || undefined,
             } as Paper;
           });
           setTrending(mapped);
         })
-        .catch(() => {});
+        .catch((e) => setTrendError(String(e?.message || e)))
+        .finally(() => setLoadingTrend(false));
     }
   }, [loadingTrend]);
-  const feedSource = (trending && trending.length > 0) ? 'Trending' : (tinderFeed.length > 0 ? 'Recommendations' : 'Mock');
 
   return (
     <div className="min-h-screen bg-background">
@@ -155,4 +123,5 @@ export default function TinderPage() {
     </div>
   );
 }
+
 
