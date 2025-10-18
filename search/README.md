@@ -107,20 +107,37 @@ Examples of `results` entries by tool (indicative, not exhaustive):
 }
 ```
 
-- Hugging Face daily/weekly/monthly:
+- Hugging Face daily/weekly/monthly (normalized fields):
+
+The HF tools return a simplified record with these fields extracted by `hugging_face_paper.py`:
+
+- `title` — paper title
+- `authors` — list of author names (prefers nested user.fullname when present)
+- `publishedAt` — ISO date/time string if available
+- `summary` — summary/highlights text if available
+- `upvotes` — number of upvotes
+- `githubrepo` — canonical GitHub repo URL if present
+- `ai_keywords` — list of AI keywords (may be empty)
+- `githubstart` — GitHub star count (if provided by source)
+
+Example:
 
 ```json
 {
   "title": "Paper title",
-  "summary": "...",
+  "authors": ["Author A", "Author B"],
   "publishedAt": "2025-10-17",
-  "paper": {
-    "id": "2410.12345",
-    "upvotes": 42,
-    "links": { "arxiv": "https://arxiv.org/abs/2410.12345" }
-  }
+  "summary": "...",
+  "upvotes": 42,
+  "githubrepo": "https://github.com/org/repo",
+  "ai_keywords": ["LLM", "RAG"],
+  "githubstart": 1234
 }
 ```
+
+Notes:
+- Weekly/monthly helpers fetch trailing windows ending at optional `end_date` (inclusive) and results are sorted by `upvotes` descending.
+- When persisting via `save_papers_as_json(..., include_links=true)`, best‑effort `links` are attached (e.g., `arxiv`, `huggingface`, `source`, `pdf`, `github`).
 
 - MCP arXiv / Google Scholar:
 
