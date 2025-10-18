@@ -8,32 +8,99 @@ This repo is a small monorepo for the Sam hackathon project. It brings together 
 .
 ├── paperpilot/     # Next.js (App Router, TypeScript) frontend UI + API proxy
 ├── paperbrain/     # Fastify-based TypeScript service for PDF/RAG/LLM APIs + local storage
-├── search/         # Python utilities to discover/fetch papers (HF, Scholar, Exa)
-├── extension/      # Minimal Chrome extension (manifest + popup)
-├── INTEGRATION_COMPLETE.md   # Summary of Supabase integration into paperpilot
+├── search/         # Python FastAPI service to discover/fetch papers (HF, Scholar, Exa)
+├── extension/      # Chrome extension to save papers via deep-link
 └── README.md
 ```
 
 ### Major components and their roles
-- `paperpilot` (frontend): Project/folder/paper UI, PDF ingest, and display of generated assets (audio/video/summaries). Its API routes proxy calls to the backend (`paperbrain`). No Supabase is required for the current setup. See `paperpilot/README.md` for UI details.
-- `paperbrain` (backend): Serves HTTP APIs for ingesting PDFs, RAG chat, podcast generation, video scripting, and video generation. Stores JSON state and generated media locally under `paperbrain/data/`. See `paperbrain/README.md` for endpoints and environment configuration.
-- `search` (python): Standalone helpers and a FastAPI service to discover/import papers from external sources (Hugging Face feeds, Exa, arXiv/Google Scholar via MCP). See `search/README.md` for endpoints and CLI usage.
-- `extension`: Optional Chrome extension to streamline importing or kicking off actions from the browser.
+- **`paperpilot`** (frontend): Next.js UI for project/folder/paper management, PDF ingest, and display of generated assets (audio/video/summaries). API routes in `app/api/*` proxy requests to `paperbrain`. Uses Zustand for local state and mock data. See `paperpilot/README.md`.
+- **`paperbrain`** (backend): Fastify service exposing REST APIs for PDF ingestion, RAG-based chat, podcast generation (ElevenLabs TTS), video script generation, and video rendering (ffmpeg). Stores papers, embeddings, and generated media locally under `paperbrain/data/`. Default port: `8787`. See `paperbrain/README.md`.
+- **`search`** (Python): FastAPI service providing unified paper discovery across Hugging Face daily/weekly/monthly feeds, Exa websets, and MCP-based arXiv/Google Scholar tools. Default port: `8000`. See `search/README.md`.
+- **`extension`**: Chrome extension (manifest v3) to save the current page as a paper via deep-link to PaperPilot.
 
-## How things are integrated
-- **Frontend ↔ Backend**: `paperpilot` proxies to `paperbrain` for all compute: ingest (`/ingest`), chat (`/chat`), podcast (`/podcast`), video script (`/video-script`), and video generation (`/generate-video`). See `paperpilot/app/api/*` for the proxy routes.
-- **Storage**: In the current setup, files and generated assets are stored and served locally by `paperbrain` under `paperbrain/data/` (e.g., `data/audio/*.mp3`, `data/video/*.mp4`, JSON state under `data/`). No Supabase is used.
-- **Data flow**:
-  1) Upload in `paperpilot` → forwarded to `paperbrain` `/ingest`.
-  2) Actions in UI (chat/podcast/video) → proxy to `paperbrain` endpoints.
-  3) `paperbrain` returns local file paths/URLs under its `data/` directory.
-  4) `paperpilot` renders returned outputs directly.
+## Integration architecture
 
-## Getting started (high level)
-- Backend: `cd paperbrain && npm i && npm run dev` (runs on http://localhost:3001)
-- Frontend: `cd paperpilot && npm i && npm run dev` (proxies to paperbrain via `app/api/*`)
-- Search tools (optional): `cd search && pip install -r ../requirements.txt` and see `search/README.md` (FastAPI on http://127.0.0.1:8000)
+### Frontend ↔ Backend
+`paperpilot` API routes (`app/api/*`) proxy all requests to `paperbrain`:
+- `/api/ingest` → `paperbrain:8787/ingest` (PDF upload & chunking)
+- `/api/chat` → `paperbrain:8787/chat` (RAG Q&A)
+- `/api/podcast` → `paperbrain:8787/podcast` (audio generation)
+- `/api/video-script` → `paperbrain:8787/video-script` (script generation)
+- `/api/generate-video` → `paperbrain:8787/generate-video` (video rendering)
+- `/api/synthesize` → `paperbrain:8787/synthesize` (multi-paper synthesis)
 
-Notes:
-- Some Supabase-related files/docs exist under `paperpilot/` as scaffolding; they are not required for the current local setup.
-- For deeper setup and endpoints, refer to the READMEs inside each subproject.
+Default proxy target: `http://127.0.0.1:3001` (override via `PAPERBRAIN_BASE_URL` env var).
+
+### Storage
+All data is stored locally by `paperbrain` under `paperbrain/data/`:
+- `data/{projectId}.json` - Papers, chunks, embeddings (JSON vector store)
+- `data/audio/{paperId}.mp3` - Generated podcast audio
+- `data/video/{paperId}.mp4` - Generated summary videos
+- `data/files/{paperId}.pdf` - Uploaded PDF files
+
+**Note:** Supabase scaffolding exists in `paperpilot/` but is not currently used.
+
+### Data flow
+1. User uploads PDF in `paperpilot` UI
+2. Frontend calls `/api/ingest` → proxies to `paperbrain`
+3. `paperbrain` extracts text, chunks, embeds, stores in JSON
+4. User triggers generation (podcast/video) → proxied to `paperbrain`
+5. `paperbrain` generates asset, saves to `data/`, returns file path
+6. Frontend displays/plays the asset
+
+## Quick start
+
+### 1. Backend (required)
+```bash
+cd paperbrain
+npm install
+npm run dev  # Starts on http://0.0.0.0:8787 (default PORT=8787)
+```
+
+**Environment:** Copy `.env.example` to `.env` and configure:
+- Embedding provider: `OPENAI_API_KEY` or `VOYAGE_API_KEY` or `JINA_API_KEY`
+- LLM provider: `ANTHROPIC_API_KEY` or `GROQ_API_KEY`
+- Optional: `ELEVENLABS_API_KEY` for podcast TTS
+
+### 2. Frontend (required)
+```bash
+cd paperpilot
+npm install
+npm run dev  # Starts on http://localhost:3000 (Next.js default)
+```
+
+**Environment (optional):** Set `PAPERBRAIN_BASE_URL` if backend isn't on `http://127.0.0.1:3001`.
+
+### 3. Search service (optional)
+```bash
+cd search
+pip install -r ../requirements.txt
+python -m uvicorn search.api:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Environment:** Create `.env` at repo root with:
+- `EXA_API_KEY` (for Exa websets)
+- `ACADEMIA_MCP_API_KEY` (for arXiv/Scholar via MCP)
+
+### 4. Browser extension (optional)
+1. Open Chrome → `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked" → select `extension/` folder
+4. Extension icon appears in toolbar
+
+## Port summary
+- **paperbrain**: `8787` (configurable via `PORT` env var)
+- **paperpilot**: `3000` (Next.js default, configurable via `next dev -p`)
+- **search**: `8000` (FastAPI, configurable via uvicorn args)
+
+**Note:** `paperpilot` API routes default to proxying `http://127.0.0.1:3001` for `paperbrain`. Either:
+- Run `paperbrain` on port 3001: `PORT=3001 npm run dev`
+- Or set `PAPERBRAIN_BASE_URL=http://127.0.0.1:8787` in `paperpilot/.env.local`
+
+## Documentation
+- `paperbrain/README.md` - API endpoints, embedding/LLM providers, data storage
+- `paperpilot/README.md` - UI components, state management, mock data
+- `search/README.md` - Search tools, API endpoints, response formats
+- `paperbrain/QUICKSTART.md` - Step-by-step backend setup
+- `INTEGRATION_COMPLETE.md` - Supabase scaffolding notes (not currently used)
