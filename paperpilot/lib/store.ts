@@ -15,7 +15,20 @@ interface StoreState {
   addProject: (project: Project) => void;
   addFolder: (folder: Folder) => void;
   addPaper: (paper: Paper) => void;
-  swipe: (paperId: string, action: 'save' | 'skip', folderId?: string) => void;
+  addPapersFromFiles: (
+    files: File[],
+    targetFolderId: string,
+    projectId: string
+  ) => void;
+  deleteProject: (projectId: string) => void;
+  deletePaper: (paperId: string) => void;
+  deleteFolder: (folderId: string) => void;
+  swipe: (
+    paperId: string,
+    action: 'save' | 'skip',
+    folderId?: string,
+    projectId?: string
+  ) => void;
   autosuggestFolder: (paperId: string) => string | null;
   markReadProgress: (paperId: string, seconds: number, scrollPct: number) => void;
   getPlaylistForFolder: (folderId: string) => Paper[];
@@ -42,13 +55,145 @@ export const useStore = create<StoreState>()(
       addPaper: (paper) =>
         set((state) => ({ papers: [...state.papers, paper] })),
 
-      swipe: (paperId, action, folderId) => {
-        if (action === 'save' && folderId) {
-          set((state) => ({
-            papers: state.papers.map((p) =>
-              p.id === paperId ? { ...p, folderId } : p
-            ),
-          }));
+      addPapersFromFiles: (files, targetFolderId, projectId) =>
+        set((state) => {
+          const ensureFolder = (
+            name: string,
+            parentId: string | undefined
+          ): string => {
+            const existing = state.folders.find(
+              (f) => f.name === name && f.parentId === parentId && f.projectId === projectId
+            );
+            if (existing) return existing.id;
+            const newId = crypto.randomUUID();
+            state.folders.push({
+              id: newId,
+              name,
+              projectId,
+              parentId,
+              tags: [],
+            });
+            return newId;
+          };
+
+          const newPapers: Paper[] = [];
+
+          const fileToDataUrl = (file: File): Promise<string> =>
+            new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve((reader.result as string) || '');
+              reader.readAsDataURL(file);
+            });
+
+          // We cannot await here in set callback; gather sync and fill dataUrl later
+          files.forEach((file: File & { webkitRelativePath?: string }) => {
+            let folderId = targetFolderId;
+            const relative = file.webkitRelativePath || '';
+            if (relative && relative.includes('/')) {
+              // Build nested folders under selected folder for directory uploads
+              const parts = relative.split('/');
+              // Drop last part (filename)
+              parts.pop();
+              let currentParent = targetFolderId || undefined;
+              parts.forEach((segment) => {
+                if (!segment) return;
+                const id = ensureFolder(segment, currentParent);
+                currentParent = id;
+                folderId = id;
+              });
+            }
+
+            const id = crypto.randomUUID();
+            const titleFromName = file.name.replace(/\.[^/.]+$/, '');
+            const url = URL.createObjectURL(file);
+
+            newPapers.push({
+              id,
+              title: titleFromName,
+              authors: [],
+              folderId: folderId || undefined,
+              projectId,
+              fileUrl: url,
+              mimeType: file.type,
+              originalFileName: file.name,
+              sizeBytes: file.size,
+            });
+
+            // Persist a data URL asynchronously (best-effort)
+            fileToDataUrl(file).then((dataUrl) => {
+              set((inner) => ({
+                papers: inner.papers.map((p) => (p.id === id ? { ...p, fileDataUrl: dataUrl } : p)),
+              }));
+            });
+          });
+
+          return {
+            folders: state.folders,
+            papers: [...state.papers, ...newPapers],
+          };
+        }),
+
+      deleteProject: (projectId) =>
+        set((state) => {
+          const remainingFolders = state.folders.filter((f) => f.projectId !== projectId);
+          const deletedFolderIds = new Set(
+            state.folders.filter((f) => f.projectId === projectId).map((f) => f.id)
+          );
+          const remainingPapers = state.papers.filter(
+            (p) => !deletedFolderIds.has(p.folderId || '') && p.projectId !== projectId
+          );
+          const remainingRecs = state.recs.filter((r) => remainingPapers.some((p) => p.id === r.paperId));
+          return {
+            projects: state.projects.filter((p) => p.id !== projectId),
+            folders: remainingFolders,
+            papers: remainingPapers,
+            recs: remainingRecs,
+          };
+        }),
+
+      deletePaper: (paperId) =>
+        set((state) => ({
+          papers: state.papers.filter((p) => p.id !== paperId),
+          recs: state.recs.filter((r) => r.paperId !== paperId),
+        })),
+
+      deleteFolder: (folderId) =>
+        set((state) => {
+          // Collect all descendant folders
+          const collect = (id: string, all: string[]) => {
+            all.push(id);
+            state.folders
+              .filter((f) => f.parentId === id)
+              .forEach((f) => collect(f.id, all));
+            return all;
+          };
+          const toDelete = collect(folderId, []);
+          const keepFolders = state.folders.filter((f) => !toDelete.includes(f.id));
+          const keepPapers = state.papers.filter((p) => !toDelete.includes(p.folderId || ''));
+          const keepRecs = state.recs.filter((r) => keepPapers.some((p) => p.id === r.paperId));
+          return { folders: keepFolders, papers: keepPapers, recs: keepRecs };
+        }),
+
+      swipe: (paperId, action, folderId, projectId) => {
+        if (action === 'save') {
+          set((state) => {
+            let targetProjectId = projectId;
+            if (!targetProjectId && folderId) {
+              const folder = state.folders.find((f) => f.id === folderId);
+              targetProjectId = folder?.projectId;
+            }
+            return {
+              papers: state.papers.map((p) =>
+                p.id === paperId
+                  ? {
+                      ...p,
+                      folderId: folderId || undefined,
+                      projectId: targetProjectId || p.projectId,
+                    }
+                  : p
+              ),
+            };
+          });
         }
         // Remove from tinder feed by marking as processed
         set((state) => ({
@@ -138,7 +283,7 @@ export const useStore = create<StoreState>()(
 
         return tinderRecs
           .map((rec) => state.papers.find((p) => p.id === rec.paperId))
-          .filter((p) => p && !p.folderId) as Paper[];
+          .filter((p) => p && !(p.folderId || p.projectId)) as Paper[];
       },
 
       getTodayMinutes: () => {

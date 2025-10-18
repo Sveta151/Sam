@@ -7,6 +7,8 @@ import { useStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ChatPanel } from '@/components/chat-panel';
+import { ActionTiles } from '@/components/action-tiles';
 
 export default function PaperReaderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -124,13 +126,15 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* Content */}
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="max-w-5xl mx-auto px-6 py-8 h-[calc(100vh-80px)] overflow-y-auto"
-      >
-        <Card className="p-8 border-border/40">
+      {/* Content Grid with right panel */}
+      <div className="content-grid gap-6 px-6 py-8">
+        {/* Reader column */}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="col-span-8 h-[calc(100vh-120px)] overflow-y-auto"
+        >
+          <Card className="p-8 border-border/40">
           {/* Paper Header */}
           <div className="space-y-6 mb-8">
             <h1 className="text-3xl font-bold leading-tight">
@@ -187,17 +191,52 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* PDF Placeholder */}
-          <div className="border-2 border-dashed border-border rounded-xl p-12 text-center bg-secondary/20">
-            <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-semibold text-lg mb-2">PDF Reader Placeholder</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Full PDF rendering will be implemented here
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Scroll to simulate reading progress
-            </p>
-          </div>
+          {/* Preview */}
+          {paper.fileUrl || paper.fileDataUrl ? (() => {
+            const displayUrl = paper.fileDataUrl || paper.fileUrl; // prefer persistent data URL when present
+            const lowerName = (paper.originalFileName || '').toLowerCase();
+            const isPdf = (paper.mimeType && paper.mimeType.includes('pdf')) || lowerName.endsWith('.pdf');
+            const isImage = (paper.mimeType && paper.mimeType.startsWith('image/')) ||
+              ['.png', '.jpg', '.jpeg', '.gif', '.webp'].some((ext) => lowerName.endsWith(ext));
+            return (
+              <div className="rounded-xl overflow-hidden border">
+                {isPdf ? (
+                  <iframe
+                    src={displayUrl || ''}
+                    className="w-full h-[70vh] bg-white"
+                    title={paper.title}
+                  />
+                ) : isImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={displayUrl || ''} alt={paper.title} className="w-full h-auto" />
+                ) : (
+                  <div className="border-2 border-dashed border-border rounded-xl p-12 text-center bg-secondary/20">
+                    <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="font-semibold text-lg mb-2">Preview not available</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {paper.originalFileName || 'Unknown file'}
+                    </p>
+                    {displayUrl && (
+                      <p className="text-xs mt-3">
+                        <a href={displayUrl} target="_blank" rel="noreferrer" className="underline">Open file in new tab</a>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })() : (
+            <div className="border-2 border-dashed border-border rounded-xl p-12 text-center bg-secondary/20">
+              <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="font-semibold text-lg mb-2">PDF Reader Placeholder</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Full PDF rendering will be implemented here
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Scroll to simulate reading progress
+              </p>
+            </div>
+          )}
 
           {/* Dummy content for scrolling */}
           <div className="mt-8 space-y-4 text-muted-foreground">
@@ -209,7 +248,18 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
               </p>
             ))}
           </div>
-        </Card>
+          </Card>
+        </div>
+
+        {/* Right panel: chat + actions */}
+        <div className="col-span-4 space-y-4 h-[calc(100vh-120px)]">
+          <div className="h-2/3">
+            <ChatPanel />
+          </div>
+          <div className="h-1/3">
+            <ActionTiles />
+          </div>
+        </div>
       </div>
     </div>
   );

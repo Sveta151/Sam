@@ -23,6 +23,15 @@ export interface Paper {
   summary2?: string;
   labels?: string[];
   folderId?: string;
+  // When a paper is saved at the project root (no folder)
+  projectId?: string;
+  // Optional local preview information when user uploads files
+  fileUrl?: string; // blob or http(s) url for preview
+  mimeType?: string;
+  originalFileName?: string;
+  sizeBytes?: number;
+  // Persisted data URL for reliable preview across reloads
+  fileDataUrl?: string;
 }
 
 export interface Recommendation {

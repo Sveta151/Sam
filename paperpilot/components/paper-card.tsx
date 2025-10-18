@@ -36,7 +36,7 @@ export function PaperCard({ paper, mode = 'compact', onClick }: PaperCardProps) 
           className="p-8 border-border/40 shadow-lg hover:shadow-xl transition-shadow cursor-pointer bg-white"
           onClick={handleClick}
         >
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 max-h-[420px] overflow-y-auto pr-2">
             {/* Header */}
             <div className="flex items-start gap-4">
               <FileText className="w-8 h-8 text-primary flex-shrink-0 mt-1" />

@@ -10,9 +10,11 @@ interface FolderTreeProps {
   folders: FolderType[];
   selectedFolderId?: string;
   onSelectFolder: (folderId: string) => void;
+  query?: string; // optional filter query
+  counts?: Record<string, number>; // optional: number of papers per folder (incl. descendants)
 }
 
-export function FolderTree({ folders, selectedFolderId, onSelectFolder }: FolderTreeProps) {
+export function FolderTree({ folders, selectedFolderId, onSelectFolder, query, counts }: FolderTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleExpand = (folderId: string) => {
@@ -27,6 +29,13 @@ export function FolderTree({ folders, selectedFolderId, onSelectFolder }: Folder
     });
   };
 
+  const normalizedQuery = (query || '').trim().toLowerCase();
+  const matchesQuery = (f: FolderType) => {
+    if (!normalizedQuery) return true;
+    const hay = `${f.name} ${f.tags?.join(' ')}`.toLowerCase();
+    return hay.includes(normalizedQuery);
+  };
+
   const rootFolders = folders.filter((f) => !f.parentId);
   
   const getChildFolders = (parentId: string) => {
@@ -39,6 +48,11 @@ export function FolderTree({ folders, selectedFolderId, onSelectFolder }: Folder
     const children = getChildFolders(folder.id);
     const hasChildren = children.length > 0;
     const FolderIcon = isExpanded ? FolderOpen : Folder;
+    const selfMatches = matchesQuery(folder);
+    const childMatches = children.some((c) => matchesQuery(c));
+    const shouldShow = selfMatches || childMatches || normalizedQuery === '';
+
+    if (!shouldShow) return null;
 
     return (
       <div key={folder.id}>
@@ -74,9 +88,9 @@ export function FolderTree({ folders, selectedFolderId, onSelectFolder }: Folder
           
           <span className="flex-1 text-sm truncate">{folder.name}</span>
           
-          {folder.tags && folder.tags.length > 0 && (
+          {typeof counts?.[folder.id] === 'number' && (
             <Badge variant="secondary" className="text-xs ml-auto">
-              {folder.tags.length}
+              {counts[folder.id]}
             </Badge>
           )}
         </div>
