@@ -32,6 +32,14 @@ export interface Paper {
   sizeBytes?: number;
   // Persisted data URL for reliable preview across reloads
   fileDataUrl?: string;
+  // External source link (arxiv/github/etc.)
+  link?: string;
+  // Popularity/score (mapped from upvotes when available)
+  upvotes?: number;
+  // GitHub stars for linked repo when provided
+  stars?: number;
+  // GitHub repository URL when provided
+  githubRepo?: string;
 }
 
 export interface Recommendation {

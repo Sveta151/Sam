@@ -41,9 +41,13 @@ export default function TinderPage() {
             title: it?.title || it?.paper?.title || 'Untitled',
             authors,
             summary2: it?.summary || it?.highlights || it?.paper?.summary || '',
-            labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 5) : [],
+            labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 6) : [],
             venue: it?.venue || undefined,
-            year: it?.year || undefined,
+            year: it?.year || (it?.publishedAt ? new Date(it.publishedAt).getFullYear() : undefined),
+            link: it?.links?.arxiv || it?.links?.source || it?.githubrepo || undefined,
+            upvotes: typeof it?.upvotes === 'number' ? it.upvotes : undefined,
+            stars: typeof it?.githubstart === 'number' ? it.githubstart : undefined,
+            githubRepo: typeof it?.githubrepo === 'string' ? it.githubrepo : undefined,
           } as Paper;
         });
         setTrending(mapped);
@@ -104,9 +108,13 @@ export default function TinderPage() {
               title: it?.title || it?.paper?.title || 'Untitled',
               authors,
               summary2: it?.summary || it?.highlights || it?.paper?.summary || '',
-              labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 5) : [],
+              labels: (it?.ai_keywords && Array.isArray(it.ai_keywords)) ? it.ai_keywords.slice(0, 6) : [],
               venue: it?.venue || undefined,
-              year: it?.year || undefined,
+              year: it?.year || (it?.publishedAt ? new Date(it.publishedAt).getFullYear() : undefined),
+              link: it?.links?.arxiv || it?.links?.source || it?.githubrepo || undefined,
+              upvotes: typeof it?.upvotes === 'number' ? it.upvotes : undefined,
+              stars: typeof it?.githubstart === 'number' ? it.githubstart : undefined,
+              githubRepo: typeof it?.githubrepo === 'string' ? it.githubrepo : undefined,
             } as Paper;
           });
           setTrending(mapped);

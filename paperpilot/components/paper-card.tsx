@@ -1,11 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FileText, Users, Calendar, Quote } from 'lucide-react';
+import { FileText, Users, Calendar, Quote, ArrowUpRight, Star } from 'lucide-react';
 import { Paper } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 interface PaperCardProps {
   paper: Paper;
@@ -15,6 +16,7 @@ interface PaperCardProps {
 
 export function PaperCard({ paper, mode = 'compact', onClick }: PaperCardProps) {
   const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
 
   const handleClick = () => {
     if (onClick) {
@@ -36,7 +38,7 @@ export function PaperCard({ paper, mode = 'compact', onClick }: PaperCardProps) 
           className="p-8 border-border/40 shadow-lg hover:shadow-xl transition-shadow cursor-pointer bg-white"
           onClick={handleClick}
         >
-          <div className="flex flex-col gap-6 max-h-[420px] overflow-y-auto pr-2">
+          <div className="relative flex flex-col gap-6 pr-2">
             {/* Header */}
             <div className="flex items-start gap-4">
               <FileText className="w-8 h-8 text-primary flex-shrink-0 mt-1" />
@@ -71,30 +73,56 @@ export function PaperCard({ paper, mode = 'compact', onClick }: PaperCardProps) 
               </div>
             </div>
 
-            {/* Venue */}
-            {paper.venue && (
-              <div className="px-3 py-1.5 bg-secondary rounded-lg text-sm font-medium inline-block self-start">
-                {paper.venue}
-              </div>
-            )}
+            {/* Venue and meta */}
+            <div className="flex flex-wrap items-center gap-4">
+              {paper.venue && (
+                <div className="px-3 py-1.5 bg-secondary rounded-lg text-sm font-medium inline-block self-start">
+                  {paper.venue}
+                </div>
+              )}
+              {paper.year && (
+                <div className="text-sm text-muted-foreground">{paper.year}</div>
+              )}
+              {typeof paper.upvotes === 'number' && (
+                <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                  <ArrowUpRight className="w-4 h-4" /> {paper.upvotes}
+                </div>
+              )}
+              {typeof paper.stars === 'number' && (
+                <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                  <Star className="w-4 h-4" /> {paper.stars}
+                </div>
+              )}
+              {paper.link && (
+                <a href={paper.link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm font-semibold text-primary underline">
+                  <ArrowUpRight className="w-4 h-4" /> Paper
+                </a>
+              )}
+              {paper.githubRepo && (
+                <a href={paper.githubRepo} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm font-semibold text-primary underline">
+                  <Star className="w-4 h-4" /> GitHub
+                </a>
+              )}
+            </div>
 
             {/* Summary */}
             {paper.summary2 && (
-              <p className="text-base leading-relaxed text-foreground/90">
-                {paper.summary2}
-              </p>
-            )}
-            {/* Extra badges for trending info if available via labels */}
-            {paper.labels && paper.labels.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {paper.labels.map((label, idx) => (
-                  <Badge key={idx} variant="secondary" className="text-xs">
-                    {label}
-                  </Badge>
-                ))}
+              <div className="relative">
+                <p className={`text-base leading-relaxed text-foreground/90 ${expanded ? '' : 'line-clamp-8'}`}>
+                  {paper.summary2}
+                </p>
+                {!expanded && (
+                  <div className="pointer-events-none absolute inset-x-0 -bottom-1 h-16 bg-gradient-to-t from-white to-transparent" />
+                )}
+                <button
+                  type="button"
+                  className="mt-2 text-sm font-medium text-primary hover:underline"
+                  onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+                >
+                  {expanded ? 'Show less' : 'Read more'}
+                </button>
               </div>
             )}
-
             {/* Labels */}
             {paper.labels && paper.labels.length > 0 && (
               <div className="flex flex-wrap gap-2">
