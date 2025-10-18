@@ -13,4 +13,7 @@ pnpm-debug.log*
 # macOS
 .DS_Store
 
+# Local storage for POC
+storage/
+
 
