@@ -242,6 +242,25 @@ class ResearchPaperSearcher:
         self.add_tool(name, tool_impl, make_default=make_default)
         return tool_impl
 
+    def add_mcp_google_scholar_tool(
+        self,
+        *,
+        name: str = "mcp_google_scholar",
+        make_default: bool = False,
+    ) -> SearchTool:
+        """Register a minimal MCP Google Scholar tool calling `mcp_google_scholar.search_google_scholar`.
+
+        Pass tool params directly via `search(..., tool=name, author=..., startYear=..., ...)`.
+        """
+
+        def tool_impl(query: str, **kwargs) -> List[dict]:
+            from .mcp_google_scholar import search_google_scholar as _gs_search
+            result = asyncio.run(_gs_search(query=query, **kwargs))
+            return result if isinstance(result, list) else [result]
+
+        self.add_tool(name, tool_impl, make_default=make_default)
+        return tool_impl
+
     @property
     def author(self) -> Optional[str]:
         return self._author

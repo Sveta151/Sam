@@ -36,6 +36,13 @@ except Exception:
     # If env is missing, keep API operational for other tools
     pass
 
+# Register MCP Google Scholar tool (requires GOOGLE_SCHOLAR_MCP_API_KEY)
+try:
+    _searcher.add_mcp_google_scholar_tool(name="mcp_google_scholar", make_default=False)
+except Exception:
+    # Keep API operational if missing env or client fails
+    pass
+
 # Register Hugging Face paper tools (no credentials required)
 try:
     _searcher.add_hf_tools(make_default=False)
