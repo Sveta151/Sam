@@ -9,7 +9,6 @@ pnpm-debug.log*
 
 # Env
 .env*
-.venv
 
 # macOS
 .DS_Store
