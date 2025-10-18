@@ -1,0 +1,36 @@
+{
+  "name": "paperbrain",
+  "version": "1.0.0",
+  "description": "NotebookLM-style context-aware research assistant",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "keywords": [
+    "rag",
+    "pdf",
+    "research",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.3",
+    "@fastify/multipart": "^8.3.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "groq-sdk": "^0.7.0",
+    "openai": "^4.58.2",
+    "pdf-parse": "1.1.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@types/pdf-parse": "^1.1.4",
+    "tsx": "^4.17.0",
+    "typescript": "^5.5.4"
+  }
+}
