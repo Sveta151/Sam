@@ -104,7 +104,7 @@ class ResearchPaperSearcher:
         make_default: bool = False,
     ) -> SearchTool:
         """Convenience helper to register the Exa search tool."""
-        from exa_search import ExaSearchTool
+        from .exa_search import ExaSearchTool
 
         exa_tool = ExaSearchTool(
             enrichment_description=enrichment_description,
@@ -115,6 +115,113 @@ class ResearchPaperSearcher:
         )
         self.add_tool(name, exa_tool, make_default=make_default)
         return exa_tool
+
+    def add_hf_daily_tool(self, *, name: str = "hf_daily", make_default: bool = False) -> SearchTool:
+        """Register a tool that fetches Hugging Face daily papers.
+
+        tool_kwargs:
+          - date: optional ISO date (YYYY-MM-DD) for a specific day
+        """
+        from .hugging_face_paper import fetch_daily_papers as _fetch_daily
+
+        def _matches_query(record: dict, query: str) -> bool:
+            if not query:
+                return True
+            q = query.lower()
+            paper = record.get("paper") or {}
+            haystack_values = [
+                record.get("title"),
+                record.get("summary"),
+                record.get("highlights"),
+                paper.get("title"),
+                paper.get("summary"),
+                paper.get("highlights"),
+            ]
+            for val in haystack_values:
+                if isinstance(val, str) and q in val.lower():
+                    return True
+            return False
+
+        def tool_impl(query: str, *, date: Optional[str] = None, **_: dict) -> List[dict]:
+            items = _fetch_daily(date=date)
+            return [it for it in items if _matches_query(it, query)]
+
+        self.add_tool(name, tool_impl, make_default=make_default)
+        return tool_impl
+
+    def add_hf_weekly_tool(self, *, name: str = "hf_weekly", make_default: bool = False) -> SearchTool:
+        """Register a tool that fetches Hugging Face weekly papers.
+
+        tool_kwargs:
+          - end_date: optional ISO date to end the trailing window
+          - days: optional int (default 7)
+        """
+        from .hugging_face_paper import fetch_weekly_papers as _fetch_weekly
+
+        def _matches_query(record: dict, query: str) -> bool:
+            if not query:
+                return True
+            q = query.lower()
+            paper = record.get("paper") or {}
+            haystack_values = [
+                record.get("title"),
+                record.get("summary"),
+                record.get("highlights"),
+                paper.get("title"),
+                paper.get("summary"),
+                paper.get("highlights"),
+            ]
+            for val in haystack_values:
+                if isinstance(val, str) and q in val.lower():
+                    return True
+            return False
+
+        def tool_impl(query: str, *, end_date: Optional[str] = None, days: int = 7, **_: dict) -> List[dict]:
+            items = _fetch_weekly(end_date=end_date, days=days)
+            return [it for it in items if _matches_query(it, query)]
+
+        self.add_tool(name, tool_impl, make_default=make_default)
+        return tool_impl
+
+    def add_hf_monthly_tool(self, *, name: str = "hf_monthly", make_default: bool = False) -> SearchTool:
+        """Register a tool that fetches Hugging Face monthly papers.
+
+        tool_kwargs:
+          - end_date: optional ISO date to end the trailing window
+          - days: optional int (default 30)
+        """
+        from .hugging_face_paper import fetch_monthly_papers as _fetch_monthly
+
+        def _matches_query(record: dict, query: str) -> bool:
+            if not query:
+                return True
+            q = query.lower()
+            paper = record.get("paper") or {}
+            haystack_values = [
+                record.get("title"),
+                record.get("summary"),
+                record.get("highlights"),
+                paper.get("title"),
+                paper.get("summary"),
+                paper.get("highlights"),
+            ]
+            for val in haystack_values:
+                if isinstance(val, str) and q in val.lower():
+                    return True
+            return False
+
+        def tool_impl(query: str, *, end_date: Optional[str] = None, days: int = 30, **_: dict) -> List[dict]:
+            items = _fetch_monthly(end_date=end_date, days=days)
+            return [it for it in items if _matches_query(it, query)]
+
+        self.add_tool(name, tool_impl, make_default=make_default)
+        return tool_impl
+
+    def add_hf_tools(self, *, make_default: bool = False) -> None:
+        """Register hf_daily, hf_weekly, and hf_monthly tools."""
+        self.add_hf_daily_tool(make_default=make_default)
+        self.add_hf_weekly_tool(make_default=False)
+        self.add_hf_monthly_tool(make_default=False)
 
     def add_mcp_arxiv_tool(
         self,
@@ -128,7 +235,7 @@ class ResearchPaperSearcher:
         """
 
         def tool_impl(query: str, **kwargs) -> List[dict]:
-            from mcp_client import arxiv_search as _arxiv_search
+            from .mcp_client import arxiv_search as _arxiv_search
             result = asyncio.run(_arxiv_search(query=query, **kwargs))
             return result if isinstance(result, list) else [result]
 
@@ -180,8 +287,7 @@ class ResearchPaperSearcher:
 
     def search(self, query: Optional[str] = None, *, tool: Optional[str] = None, **tool_kwargs) -> SearchResult:
         active_query = query if query is not None else self._query
-        if not active_query:
-            raise ValueError("A search query must be provided.")
+        # Allow empty queries for tools that don't require a query (e.g., HF tools)
         tool_name = tool or self._default_tool
         if tool_name not in self._tools:
             raise ValueError(f"Tool '{tool_name}' is not registered. Available tools: {', '.join(self._tools)}")
