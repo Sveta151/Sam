@@ -86,8 +86,19 @@ async def search_google_scholar(
             items = []
             for item in content:
                 # Prefer explicit JSON payloads if present
-                if hasattr(item, "json") and getattr(item, "json") is not None:
-                    items.append(_coerce_jsonable(getattr(item, "json")))
+                json_attr = getattr(item, "json", None)
+                if callable(json_attr):
+                    try:
+                        json_str = json_attr()
+                        try:
+                            items.append(json.loads(json_str))
+                        except Exception:
+                            items.append(json_str)
+                        continue
+                    except Exception:
+                        pass
+                elif json_attr is not None:
+                    items.append(_coerce_jsonable(json_attr))
                     continue
                 # Text payloads: try to parse JSON, else keep as text
                 text_value = getattr(item, "text", None) or getattr(item, "output_text", None)

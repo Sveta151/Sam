@@ -1,6 +1,7 @@
 import os
 from urllib.parse import urlencode
 import asyncio
+import json
 
 from dotenv import load_dotenv
 from mcp import ClientSession
@@ -80,7 +81,72 @@ async def arxiv_search(
             await session.initialize()
             # Invoke the tool by name
             result = await session.call_tool("arxiv_search", args)
-            return result
+
+            # Convert the MCP CallToolResult into JSON-serializable data
+            def _coerce_jsonable(value):
+                if value is None or isinstance(value, (str, int, float, bool)):
+                    return value
+                if isinstance(value, (list, tuple, set)):
+                    return [_coerce_jsonable(v) for v in value]
+                if isinstance(value, dict):
+                    return {str(_coerce_jsonable(k)): _coerce_jsonable(v) for k, v in value.items()}
+                if hasattr(value, "model_dump_json"):
+                    try:
+                        return json.loads(value.model_dump_json())
+                    except Exception:
+                        pass
+                if hasattr(value, "model_dump"):
+                    try:
+                        return _coerce_jsonable(value.model_dump())
+                    except Exception:
+                        pass
+                if hasattr(value, "dict"):
+                    try:
+                        return _coerce_jsonable(value.dict())
+                    except Exception:
+                        pass
+                try:
+                    return str(value)
+                except Exception:
+                    return "<unserializable>"
+
+            content = getattr(result, "content", None)
+            if content is None:
+                return {"result": _coerce_jsonable(result)}
+
+            items = []
+            for item in content:
+                # Pydantic v1-style: item.json() returns a JSON string
+                json_attr = getattr(item, "json", None)
+                if callable(json_attr):
+                    try:
+                        json_str = json_attr()
+                        try:
+                            items.append(json.loads(json_str))
+                        except Exception:
+                            items.append(json_str)
+                        continue
+                    except Exception:
+                        pass
+                elif json_attr is not None:
+                    items.append(_coerce_jsonable(json_attr))
+                    continue
+                text_value = getattr(item, "text", None) or getattr(item, "output_text", None)
+                if isinstance(text_value, str):
+                    try:
+                        items.append(json.loads(text_value))
+                    except Exception:
+                        items.append(text_value)
+                    continue
+                data_value = getattr(item, "data", None)
+                if data_value is not None:
+                    items.append(_coerce_jsonable(data_value))
+                    continue
+                items.append(_coerce_jsonable(item))
+
+            if len(items) == 1:
+                return items[0]
+            return items
 
 async def main() -> None:
     tools = await list_tools()

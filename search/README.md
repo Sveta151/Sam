@@ -37,6 +37,30 @@ ACADEMIA_MCP_API_KEY=smithery_xxx
 ```
 
 
+### Tool parameters at a glance
+
+- **Exa (`exa`)**
+  - Required: `enrichment_description`
+  - Optional: `count` (int, default 10), `use_cache` (bool, default true)
+  - Notes: reads `EXA_API_KEY`; results cached under `search/.cache/exa/`
+
+- **Hugging Face**
+  - `hf_daily`: `date` (YYYY-MM-DD, optional)
+  - `hf_weekly`: `end_date` (YYYY-MM-DD, optional), `days` (int, default 7)
+  - `hf_monthly`: `end_date` (YYYY-MM-DD, optional), `days` (int, default 30)
+  - Notes: `query` may be empty; server-side filtering matches title/summary/highlights
+
+- **MCP arXiv (`mcp_arxiv`)**
+  - Required: `query`
+  - Optional: `limit`, `offset`, `sort_by`, `end_date`, `sort_order`, `start_date`, `include_abstracts`
+  - Notes: uses `ACADEMIA_MCP_API_KEY`; parameters are forwarded to the MCP tool
+
+- **MCP Google Scholar (`mcp_google_scholar`)**
+  - Required: `query`
+  - Optional: `author`, `startYear`, `endYear`, `numResults`
+  - Notes: uses `ACADEMIA_MCP_API_KEY`; parameters are forwarded to the MCP tool
+
+
 ### FastAPI service
 
 Run locally:
@@ -53,6 +77,61 @@ Endpoints:
 - `POST /search` → run a query through the chosen tool
 
 Request/response models are defined in `search/api.py`.
+
+
+#### Response shape
+
+`POST /search` responds with:
+
+```json
+{
+  "tool": "exa",
+  "count": 5,
+  "results": [ { "...": "tool-specific fields" } ]
+}
+```
+
+- `results` is a list of JSON-like dicts. Shape varies by tool.
+- `limit` (if provided in the request) caps the list length after tool execution.
+
+Examples of `results` entries by tool (indicative, not exhaustive):
+
+- Exa:
+
+```json
+{
+  "id": "webset-item-id",
+  "url": "https://example.com/paper",
+  "title": "Paper title",
+  "enrichments": [ { "description": "Main research outcome", "text": "..." } ]
+}
+```
+
+- Hugging Face daily/weekly/monthly:
+
+```json
+{
+  "title": "Paper title",
+  "summary": "...",
+  "publishedAt": "2025-10-17",
+  "paper": {
+    "id": "2410.12345",
+    "upvotes": 42,
+    "links": { "arxiv": "https://arxiv.org/abs/2410.12345" }
+  }
+}
+```
+
+- MCP arXiv / Google Scholar:
+
+```json
+{
+  "title": "Paper title",
+  "authors": ["Author A", "Author B"],
+  "abstract": "...",
+  "url": "https://arxiv.org/abs/XXXX.YYYYY"
+}
+```
 
 
 #### Register Exa (optional)
@@ -220,4 +299,7 @@ results = searcher.search("vision-language models", tool="exa", count=5)
 - MCP servers are hosted via Smithery; ensure `ACADEMIA_MCP_API_KEY` is valid and has access.
 - The FastAPI service attempts to register tools opportunistically; missing keys won’t crash the server.
 
+Maintenance tips:
+- Clear Exa cache by deleting files in `search/.cache/exa/`.
+- Use `GET /tools` to confirm which tools registered successfully at startup.
 
