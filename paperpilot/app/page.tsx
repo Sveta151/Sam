@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 import { SwipeDeck } from '@/components/swipe-deck';
 import { StreakWidget } from '@/components/streak-widget';
 import { NudgeCard } from '@/components/nudge-card';
+import MarketImpact from '@/components/market-impact';
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -295,6 +296,11 @@ export default function HomePage() {
       <div className="col-span-12 md:col-span-5 space-y-6">
         <NudgeCard />
         <StreakWidget variant="full" />
+      </div>
+
+      {/* Full-width: Market Impact */}
+      <div className="col-span-12">
+        <MarketImpact />
       </div>
     </div>
   );

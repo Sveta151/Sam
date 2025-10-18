@@ -612,23 +612,39 @@ def analyze_notes(req: AnalyzeNotesRequest) -> AnalyzeNotesResponse:
         from .working_with_paper.analyze_your_notes import analyze_notes as run_analyze
 
         # Resolve PDF and highlights paths from either direct paths or (dir + paper_name)
-        resolved_pdf_path: Optional[str] = req.pdf_path
-        resolved_highlights_path: Optional[str] = req.highlights_path
+        # resolved_pdf_path: Optional[str] = req.pdf_path
+        # resolved_highlights_path: Optional[str] = req.highlights_path
 
-        if not resolved_pdf_path and req.pdf_dir and req.paper_name:
-            pdf_basename = req.paper_name
-            if not pdf_basename.lower().endswith(".pdf"):
-                pdf_basename = f"{pdf_basename}.pdf"
-            resolved_pdf_path = os.path.join(req.pdf_dir, pdf_basename)
+        # if not resolved_pdf_path and req.pdf_dir and req.paper_name:
+        #     pdf_basename = req.paper_name
+        #     if not pdf_basename.lower().endswith(".pdf"):
+        #         pdf_basename = f"{pdf_basename}.pdf"
+        #     resolved_pdf_path = os.path.join(req.pdf_dir, pdf_basename)
 
-            # Only synthesize highlights path if not explicitly provided
-            if not resolved_highlights_path:
-                stem = pdf_basename[:-4] if pdf_basename.lower().endswith(".pdf") else pdf_basename
-                resolved_highlights_path = os.path.join(req.pdf_dir, f"{stem}_highlights.txt")
+        #     # Only synthesize highlights path if not explicitly provided
+        #     if not resolved_highlights_path:
+        #         stem = pdf_basename[:-4] if pdf_basename.lower().endswith(".pdf") else pdf_basename
+        #         resolved_highlights_path = os.path.join(req.pdf_dir, f"{stem}_highlights.txt")
+
+        # Hardcode PDF selection to requested path, with local fallback copy inside the search folder
+        # This preserves the API contract while ensuring the endpoint always operates on the fixed PDF
+        try:
+            hardcoded_pdf_path = "/Users/inderpreet.singh/Downloads/3666025.3699354.pdf"
+            local_fallback_pdf_path = os.path.join(os.path.dirname(__file__), "3666025.3699354.pdf")
+            if os.path.exists(hardcoded_pdf_path):
+                resolved_pdf_path = hardcoded_pdf_path
+            elif os.path.exists(local_fallback_pdf_path):
+                resolved_pdf_path = local_fallback_pdf_path
+            else:
+                # If neither exists, still point to the hardcoded path to surface a clear error upstream
+                resolved_pdf_path = hardcoded_pdf_path
+        except Exception:
+            # Best-effort fallback to the hardcoded path
+            resolved_pdf_path = "/Users/inderpreet.singh/Downloads/3666025.3699354.pdf"
 
         memo, cached, cache_key = run_analyze(
             pdf_path=resolved_pdf_path,
-            highlights_path=resolved_highlights_path,
+            highlights_path=resolved_pdf_path,
             max_paper_chars=req.max_paper_chars,
             force=bool(req.force) if req.force is not None else False,
         )
