@@ -135,13 +135,33 @@ def _normalize_exa(item: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         pass
     properties = item.get("properties") or {}
     rp = properties.get("research_paper") or {}
-    title = str(
+    # Build title with multiple fallbacks, including parsing enrichment text
+    def _extract_title_from_text(text: str) -> Optional[str]:
+        try:
+            if not isinstance(text, str):
+                return None
+            # Common Exa enrichment format: "Title: ... | Authors: ... | Abstract: ..."
+            marker = "Title:"
+            if marker in text:
+                part = text.split(marker, 1)[1].strip()
+                # stop at Authors: or newline or | separator
+                for stop in ["| Authors:", "\n", "|"]:
+                    if stop in part:
+                        part = part.split(stop, 1)[0].strip()
+                        break
+                # Trim excessive whitespace
+                part = " ".join(part.split())
+                return part if part else None
+            return None
+        except Exception:
+            return None
+
+    title = (
         item.get("title")
         or item.get("resultTitle")
         or item.get("name")
         or rp.get("title")
         or properties.get("title")
-        or "Untitled"
     )
     # Exa items often carry the main link in properties.url
     url = (
@@ -164,6 +184,9 @@ def _normalize_exa(item: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         summary = enrichment
     if not summary and isinstance(properties.get("description"), str):
         summary = properties.get("description")
+    # If title still missing, try to parse from enrichment/summary text
+    if not title:
+        title = _extract_title_from_text(summary) if isinstance(summary, str) else None
     links = {}
     if url:
         links["source"] = str(url)
@@ -176,7 +199,7 @@ def _normalize_exa(item: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         authors = [str(a).strip() for a in author_field if str(a).strip()]
 
     unified = {
-        "title": title,
+        "title": str(title or "Untitled"),
         "authors": authors,
         "summary": summary,
         "links": links,
