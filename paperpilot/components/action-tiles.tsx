@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Headphones, FileText, Sparkles, Video, Loader2 } from 'lucide-react';
@@ -15,6 +15,7 @@ interface ActionTilesProps {
 export function ActionTiles({ disabled = false, paperId }: ActionTilesProps) {
   // const { saveGeneratedAsset } = useSupabaseUploads(); // TODO: Uncomment when integrating paperbrain
   const [loading, setLoading] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   const handleGeneratePodcast = async () => {
     if (!paperId) {
@@ -24,22 +25,24 @@ export function ActionTiles({ disabled = false, paperId }: ActionTilesProps) {
 
     setLoading('podcast');
     try {
-      // TODO: Call paperbrain API to generate podcast
-      // For now, simulate with a mock URL
-      toast.info('Generating podcast... (calling paperbrain API)');
-      
-      // Example: const response = await fetch(`http://localhost:3001/api/v1/podcast/${paperId}`);
-      // const data = await response.json();
-      // const audioUrl = data.audioUrl;
-      
-      // Mock for demonstration:
-      // await saveGeneratedAsset({
-      //   paperId,
-      //   url: audioUrl,
-      //   kind: 'audio',
-      // });
-      
-      toast.success('Podcast generation started! (integrate paperbrain API)');
+      toast.info('Generating podcast...');
+      const res = await fetch(`http://localhost:8787/v1/papers/${paperId}/podcast`, { method: 'POST' });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Podcast API failed');
+      }
+      const json = await res.json();
+      const url: string | undefined = json?.url;
+      const audioBase64: string | undefined = json?.audioBase64;
+      if (audioBase64) {
+        const src = `data:audio/mpeg;base64,${audioBase64}`;
+        setAudioUrl(src);
+      } else if (url) {
+        // Backend may serve `/audio/<id>.mp3` relative to its host; make absolute
+        const absolute = url.startsWith('http') ? url : `http://localhost:8787${url.startsWith('/') ? '' : '/'}${url}`;
+        setAudioUrl(absolute);
+      }
+      toast.success('Podcast ready');
     } catch (error) {
       console.error('Podcast generation error:', error);
       toast.error('Failed to generate podcast');
@@ -140,6 +143,11 @@ export function ActionTiles({ disabled = false, paperId }: ActionTilesProps) {
             <div>
               <div className="font-medium text-sm">Podcast</div>
               <div className="text-xs text-muted-foreground">Create an audio explainer</div>
+              {audioUrl && (
+                <audio controls className="mt-2 w-full">
+                  <source src={audioUrl} type="audio/mpeg" />
+                </audio>
+              )}
             </div>
           </div>
           <Button 

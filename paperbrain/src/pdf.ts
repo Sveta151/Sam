@@ -1,6 +1,7 @@
 // PDF text extraction and metadata parsing
 
-import pdfParse from 'pdf-parse';
+// @ts-ignore - internal entry avoids debug code in package index
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { readFile } from 'fs/promises';
 import type { Paper } from './types.js';
 import { paperId } from './utils/id.js';

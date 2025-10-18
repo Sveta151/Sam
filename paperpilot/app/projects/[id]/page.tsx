@@ -73,9 +73,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     ? folderPapers
     : papers.filter((p) => p.projectId === id || projectFolders.some((f) => f.id === p.folderId));
 
-  const visiblePapers = (selectedFolderId || searchScope === 'all')
+  // When no folder is selected, always show project-root papers regardless of tab
+  const visiblePapers = selectedFolderId
     ? scopedPapers.filter(paperMatches)
-    : [];
+    : folderPapers.filter(paperMatches);
 
   const playlistPapers = useMemo(() => {
     if (!selectedFolderId) return [];

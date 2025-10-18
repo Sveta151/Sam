@@ -10,11 +10,15 @@ import { Card } from '@/components/ui/card';
 import { PaperCard } from '@/components/paper-card';
 import type { Paper } from '@/lib/types';
 import { mockPapers, mockRecommendations } from '@/lib/mock';
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
+  const router = useRouter();
   const [isHydrated, setIsHydrated] = useState(false);
   const papers = useStore((state) => state.papers);
   const recs = useStore((state) => state.recs);
+  const addProject = useStore((state) => state.addProject);
+  const addPaper = useStore((state) => state.addPaper);
   const [query, setQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState<any[]>([]);
   const [trending, setTrending] = useState<Paper[] | null>(null);
@@ -25,6 +29,27 @@ export default function HomePage() {
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  // Seed Demo Project + sample paper once
+  useEffect(() => {
+    if (!isHydrated) return;
+    const hasDemo = papers.some((p) => p.id === 'demo-sample-paper');
+    if (hasDemo) return;
+    const existingDemoProject = (useStore.getState().projects || []).find((p) => p.id === 'demo-project');
+    if (!existingDemoProject) {
+      addProject({ id: 'demo-project', name: 'Demo Project', domainFocus: 'Wireless communications' });
+    }
+    addPaper({
+      id: 'demo-sample-paper',
+      title: 'Enhancing LoRa Reception with Generative Models (Demo)',
+      authors: ['Demo Author'],
+      projectId: 'demo-project',
+      originalFileName: '3666025.3699354.pdf',
+      mimeType: 'application/pdf',
+      fileUrl: '/3666025.3699354.pdf',
+      sizeBytes: undefined,
+    });
+  }, [isHydrated, papers, addProject, addPaper]);
 
   // Prefetch trending stack for home tinder section
   useEffect(() => {

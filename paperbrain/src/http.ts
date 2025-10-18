@@ -10,7 +10,13 @@ const log = logger.child('http');
 export async function setupHTTP(fastify: FastifyInstance) {
   // CORS
   await fastify.register(cors, {
-    origin: env.CORS_ORIGIN,
+    origin: [
+      env.CORS_ORIGIN,
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

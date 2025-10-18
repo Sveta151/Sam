@@ -12,7 +12,7 @@ interface Message {
   content: string;
 }
 
-export function ChatPanel({ title = 'Chat about this paper' }: { title?: string }) {
+export function ChatPanel({ title = 'Chat about this paper', paperId }: { title?: string; paperId?: string }) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -22,6 +22,7 @@ export function ChatPanel({ title = 'Chat about this paper' }: { title?: string 
   ]);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -29,19 +30,43 @@ export function ChatPanel({ title = 'Chat about this paper' }: { title?: string 
     }
   }, [messages]);
 
-  const send = () => {
+  const send = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
+    setIsSending(true);
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: trimmed };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    // Mock assistant reply
-    const reply: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: 'Thanks! This will connect to summarization soon. For now, consider key contributions and limitations.',
-    };
-    setTimeout(() => setMessages((prev) => [...prev, reply]), 400);
+    try {
+      if (!paperId) {
+        const reply: Message = { id: crypto.randomUUID(), role: 'assistant', content: 'Paper not ingested yet. Please retry once ingest completes.' };
+        setMessages((prev) => [...prev, reply]);
+        setIsSending(false);
+        return;
+      }
+      const res = await fetch('http://localhost:8787/v1/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          paperId,
+          messages: [{ role: 'user', content: trimmed }],
+          topK: 8,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Chat failed');
+      }
+      const json = await res.json();
+      const answer: string = json?.answer || 'No answer.';
+      const reply: Message = { id: crypto.randomUUID(), role: 'assistant', content: answer };
+      setMessages((prev) => [...prev, reply]);
+    } catch (err: any) {
+      const reply: Message = { id: crypto.randomUUID(), role: 'assistant', content: String(err?.message || err) };
+      setMessages((prev) => [...prev, reply]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -73,7 +98,7 @@ export function ChatPanel({ title = 'Chat about this paper' }: { title?: string 
             if (e.key === 'Enter') send();
           }}
         />
-        <Button onClick={send}>Send</Button>
+        <Button onClick={send} disabled={isSending}>{isSending ? 'Sending...' : 'Send'}</Button>
       </div>
     </Card>
   );

@@ -9,11 +9,13 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChatPanel } from '@/components/chat-panel';
 import { ActionTiles } from '@/components/action-tiles';
+import { toast } from 'sonner';
 
 export default function PaperReaderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const papers = useStore((state) => state.papers);
+  const updatePaper = useStore((state) => state.updatePaper);
   const markReadProgress = useStore((state) => state.markReadProgress);
   
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -24,6 +26,40 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
   const paper = papers.find((p) => p.id === id);
 
   useEffect(() => {
+    // Trigger backend ingest if this is the demo sample and not yet ingested
+    const doIngest = async () => {
+      if (!paper) return;
+      if (paper.paperbrainId) return;
+      // Only auto-ingest for our seeded demo paper
+      if (paper.id !== 'demo-sample-paper') return;
+      try {
+        const form = new FormData();
+        form.set('projectId', 'default');
+        // Fetch the pdf from public and append as file
+        const resPdf = await fetch(paper.fileUrl || '/3666025.3699354.pdf');
+        if (!resPdf.ok) throw new Error('Failed to fetch sample PDF');
+        const blob = await resPdf.blob();
+        form.set('pdf', new File([blob], paper.originalFileName || 'paper.pdf', { type: blob.type || 'application/pdf' }));
+        const ingest = await fetch('http://localhost:8787/v1/papers/ingest', { method: 'POST', body: form });
+        if (!ingest.ok) {
+          const text = await ingest.text();
+          throw new Error(text || 'Ingest failed');
+        }
+        const json = await ingest.json();
+        const backendId = json?.paper?.id as string | undefined;
+        if (backendId) {
+          updatePaper(paper.id, { paperbrainId: backendId, title: json.paper.title || paper.title, authors: Array.isArray(json.paper.authors) ? json.paper.authors : paper.authors, venue: json.paper.venue || paper.venue, year: json.paper.year || paper.year, citations: json.paper.citations ?? paper.citations });
+          toast.success('Ingested paper to PaperBrain');
+        } else {
+          toast.error('Ingest succeeded but no paper id returned');
+        }
+      } catch (err: any) {
+        toast.error(String(err?.message || err));
+      }
+    };
+
+    doIngest();
+
     // Track time spent on page
     timerRef.current = setInterval(() => {
       setTimeSpent((prev) => prev + 1);
@@ -192,8 +228,9 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
           )}
 
           {/* Preview */}
-          {paper.fileUrl || paper.fileDataUrl ? (() => {
-            const displayUrl = paper.fileDataUrl || paper.fileUrl; // prefer persistent data URL when present
+          {paper.fileUrl || paper.fileDataUrl || paper.id === 'demo-sample-paper' ? (() => {
+            // Prefer persisted data URL, then runtime file URL. For demo, fallback to bundled public PDF on reloads
+            const displayUrl = paper.fileDataUrl || paper.fileUrl || (paper.id === 'demo-sample-paper' ? '/3666025.3699354.pdf' : '');
             const lowerName = (paper.originalFileName || '').toLowerCase();
             const isPdf = (paper.mimeType && paper.mimeType.includes('pdf')) || lowerName.endsWith('.pdf');
             const isImage = (paper.mimeType && paper.mimeType.startsWith('image/')) ||
@@ -254,10 +291,10 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
         {/* Right panel: chat + actions */}
         <div className="col-span-4 space-y-4 h-[calc(100vh-120px)]">
           <div className="h-2/3">
-            <ChatPanel />
+            <ChatPanel paperId={paper.paperbrainId} />
           </div>
           <div className="h-1/3">
-            <ActionTiles paperId={id} />
+            <ActionTiles paperId={paper.paperbrainId} />
           </div>
         </div>
       </div>

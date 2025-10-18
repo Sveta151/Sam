@@ -229,9 +229,11 @@ export async function papersRoute(fastify: FastifyInstance) {
       const filename = customFilename || data.filename;
       const buffer = await data.toBuffer();
 
-      // Save temporarily
-      const tempPath = join('/tmp', `upload_${Date.now()}_${filename}`);
-      await saveUploadedFile(buffer, '/tmp', `upload_${Date.now()}_${filename}`);
+      // Save temporarily (use a single timestamp to avoid mismatched filenames)
+      const timestamp = Date.now();
+      const tempName = `upload_${timestamp}_${filename}`;
+      const tempPath = join('/tmp', tempName);
+      await saveUploadedFile(buffer, '/tmp', tempName);
 
       log.info(`Processing PDF: ${filename} for project ${projectId}`);
 

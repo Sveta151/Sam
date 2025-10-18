@@ -25,6 +25,8 @@ export interface Paper {
   folderId?: string;
   // When a paper is saved at the project root (no folder)
   projectId?: string;
+  // Backend PaperBrain identifier (returned from ingest API)
+  paperbrainId?: string;
   // Optional local preview information when user uploads files
   fileUrl?: string; // blob or http(s) url for preview
   mimeType?: string;

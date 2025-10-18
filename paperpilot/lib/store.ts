@@ -15,6 +15,7 @@ interface StoreState {
   addProject: (project: Project) => void;
   addFolder: (folder: Folder) => void;
   addPaper: (paper: Paper) => void;
+  updatePaper: (paperId: string, updates: Partial<Paper>) => void;
   addPapersFromFiles: (
     files: File[],
     targetFolderId: string,
@@ -54,6 +55,11 @@ export const useStore = create<StoreState>()(
 
       addPaper: (paper) =>
         set((state) => ({ papers: [...state.papers, paper] })),
+
+      updatePaper: (paperId, updates) =>
+        set((state) => ({
+          papers: state.papers.map((p) => (p.id === paperId ? { ...p, ...updates } : p)),
+        })),
 
       addPapersFromFiles: (files, targetFolderId, projectId) =>
         set((state) => {

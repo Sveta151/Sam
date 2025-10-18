@@ -30,6 +30,7 @@ export async function podcastRoute(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             url: { type: 'string' },
+            audioBase64: { type: 'string' },
           },
         },
         404: {
@@ -88,6 +89,7 @@ export async function podcastRoute(fastify: FastifyInstance) {
 
       return reply.send({
         url: `/audio/${paperId}.mp3`,
+        audioBase64: audioBuffer.toString('base64'),
       });
     } catch (error) {
       log.error('Podcast generation failed', error);
