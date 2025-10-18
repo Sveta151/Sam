@@ -586,6 +586,59 @@ async def _fetch_arxiv_async(query: str, limit: int) -> List[Dict[str, Any]]:
         return []
 
 
+# Minimal endpoint that calls the existing analyze_notes function from working_with_paper
+class AnalyzeNotesRequest(BaseModel):
+    # Back-compat direct paths
+    pdf_path: Optional[str] = None
+    highlights_path: Optional[str] = None
+    # Preferred: provide directory and paper name
+    pdf_dir: Optional[str] = None
+    paper_name: Optional[str] = None  # e.g., "test_pdf" or "test_pdf.pdf"
+    # Options
+    max_paper_chars: Optional[int] = None
+    force: Optional[bool] = None
+
+
+class AnalyzeNotesResponse(BaseModel):
+    memo: str
+    cached: bool
+    cache_key: str
+
+
+@app.post("/analyze-notes", response_model=AnalyzeNotesResponse)
+def analyze_notes(req: AnalyzeNotesRequest) -> AnalyzeNotesResponse:
+    try:
+        # Import at call-time to avoid circulars and keep dependency local
+        from .working_with_paper.analyze_your_notes import analyze_notes as run_analyze
+
+        # Resolve PDF and highlights paths from either direct paths or (dir + paper_name)
+        resolved_pdf_path: Optional[str] = req.pdf_path
+        resolved_highlights_path: Optional[str] = req.highlights_path
+
+        if not resolved_pdf_path and req.pdf_dir and req.paper_name:
+            pdf_basename = req.paper_name
+            if not pdf_basename.lower().endswith(".pdf"):
+                pdf_basename = f"{pdf_basename}.pdf"
+            resolved_pdf_path = os.path.join(req.pdf_dir, pdf_basename)
+
+            # Only synthesize highlights path if not explicitly provided
+            if not resolved_highlights_path:
+                stem = pdf_basename[:-4] if pdf_basename.lower().endswith(".pdf") else pdf_basename
+                resolved_highlights_path = os.path.join(req.pdf_dir, f"{stem}_highlights.txt")
+
+        memo, cached, cache_key = run_analyze(
+            pdf_path=resolved_pdf_path,
+            highlights_path=resolved_highlights_path,
+            max_paper_chars=req.max_paper_chars,
+            force=bool(req.force) if req.force is not None else False,
+        )
+        return AnalyzeNotesResponse(memo=memo, cached=cached, cache_key=cache_key)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest) -> SearchResponse:
     try:
