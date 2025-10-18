@@ -4,40 +4,51 @@ import Fastify from 'fastify';
 import multipart from '@fastify/multipart';
 import { env } from './env.js';
 import { logger } from './utils/logger.js';
-import { ingestRoute } from './routes/ingest.js';
-import { chatRoute } from './routes/chat.js';
-import { podcastRoute } from './routes/podcast.js';
-import { videoScriptRoute } from './routes/video-script.js';
-import { generateVideoRoute } from './routes/generate-video.js';
-import { synthRoute } from './routes/synth.js';
+import { setupHTTP } from './http.js';
+import { setupOpenAPI } from './openapi.js';
+
+// Route imports
+import { healthRoute } from './routes/health.js';
+import { projectsRoute } from './routes/v1.projects.js';
+import { foldersRoute } from './routes/v1.folders.js';
+import { papersRoute } from './routes/v1.papers.js';
+import { chatRoute } from './routes/v1.chat.js';
+import { synthesisRoute } from './routes/v1.synthesis.js';
+import { podcastRoute } from './routes/v1.podcast.js';
+import { videoRoute } from './routes/v1.video.js';
+import { searchRoute } from './routes/v1.search.js';
 
 const log = logger.child('server');
 
 async function start() {
   const fastify = Fastify({
     logger: false, // Use our custom logger
-    bodyLimit: 50 * 1024 * 1024, // 50MB for PDFs
+    bodyLimit: 40 * 1024 * 1024, // 40MB for PDFs
   });
+
+  // Setup HTTP middleware (CORS, error handling)
+  await setupHTTP(fastify);
+
+  // Setup OpenAPI documentation
+  await setupOpenAPI(fastify);
 
   // Register multipart for file uploads
   await fastify.register(multipart, {
     limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB
+      fileSize: 40 * 1024 * 1024, // 40MB
     },
   });
 
-  // Health check
-  fastify.get('/health', async () => {
-    return { status: 'ok', timestamp: new Date().toISOString() };
-  });
-
   // Register routes
-  await ingestRoute(fastify);
+  await healthRoute(fastify);
+  await projectsRoute(fastify);
+  await foldersRoute(fastify);
+  await papersRoute(fastify);
   await chatRoute(fastify);
+  await synthesisRoute(fastify);
   await podcastRoute(fastify);
-  await videoScriptRoute(fastify);
-  await generateVideoRoute(fastify);
-  await synthRoute(fastify);
+  await videoRoute(fastify);
+  await searchRoute(fastify);
 
   // Start server
   const port = parseInt(env.PORT, 10);
@@ -45,10 +56,12 @@ async function start() {
 
   try {
     await fastify.listen({ port, host });
-    log.info(`🚀 paperbrain server running on http://${host}:${port}`);
+    log.info(`🚀 PaperBrain API running on http://${host}:${port}`);
+    log.info(`📚 OpenAPI docs available at http://${host}:${port}/docs`);
     log.info(`   Embeddings: ${env.EMBEDDINGS_PROVIDER}`);
     log.info(`   LLM: ${env.LLM_PROVIDER}`);
     log.info(`   Data: ${env.DATA_DIR}`);
+    log.info(`   CORS: ${env.CORS_ORIGIN}`);
   } catch (err) {
     log.error('Failed to start server', err);
     process.exit(1);
@@ -67,4 +80,3 @@ process.on('SIGTERM', () => {
 });
 
 start();
-

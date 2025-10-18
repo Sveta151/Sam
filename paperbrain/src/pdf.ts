@@ -16,7 +16,12 @@ interface ExtractResult {
 /**
  * Extract text and metadata from a PDF file
  */
-export async function extractPdf(filePath: string, filename: string): Promise<ExtractResult> {
+export async function extractPdf(
+  filePath: string,
+  filename: string,
+  projectId: string,
+  folderId?: string
+): Promise<ExtractResult> {
   log.info(`Extracting PDF: ${filename}`);
   
   const dataBuffer = await readFile(filePath);
@@ -30,6 +35,8 @@ export async function extractPdf(filePath: string, filename: string): Promise<Ex
   
   const paper: Paper = {
     id: paperId(),
+    projectId,
+    folderId,
     title: metadata.title,
     authors: metadata.authors,
     year: metadata.year,

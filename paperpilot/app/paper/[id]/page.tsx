@@ -257,7 +257,7 @@ export default function PaperReaderPage({ params }: { params: Promise<{ id: stri
             <ChatPanel />
           </div>
           <div className="h-1/3">
-            <ActionTiles />
+            <ActionTiles paperId={id} />
           </div>
         </div>
       </div>

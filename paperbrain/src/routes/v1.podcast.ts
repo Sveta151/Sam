@@ -1,79 +1,100 @@
-// POST /podcast - Generate audio podcast summary
+// v1 Podcast routes
 
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
-import { memoryStore } from '../store/memory.js';
+import { store } from '../store/fs-json.js';
 import { getLLMProvider } from '../llm/index.js';
 import { PODCAST_SCRIPT } from '../prompts.js';
 import { env } from '../env.js';
 import { logger } from '../utils/logger.js';
-import type { Message, PodcastResponse } from '../types.js';
 
 const log = logger.child('route:podcast');
 
-const podcastSchema = z.object({
-  paperId: z.string(),
-  style: z.enum(['neutral', 'explainer']).optional().default('neutral'),
-  duration: z.number().optional().default(180),
-  projectId: z.string().optional().default('default'),
-});
-
 export async function podcastRoute(fastify: FastifyInstance) {
+  // POST /v1/papers/:id/podcast - Generate podcast for a paper
   fastify.post<{
-    Body: z.infer<typeof podcastSchema>;
-  }>('/podcast', async (request, reply) => {
+    Params: { id: string };
+  }>('/v1/papers/:id/podcast', {
+    schema: {
+      tags: ['podcast'],
+      description: 'Generate audio podcast summary for a paper',
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+        },
+        404: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
     try {
-      const { paperId, duration, projectId } = podcastSchema.parse(request.body);
-      
+      const { id: paperId } = request.params;
+
       log.info(`Generating podcast for paper ${paperId}`);
-      
-      // Get paper metadata
-      const paper = await memoryStore.getPaper(projectId, paperId);
-      if (!paper) {
-        return reply.code(404).send({ error: 'Paper not found' });
+
+      // Get paper
+      const paperData = await store.getPaper(paperId);
+      if (!paperData) {
+        return reply.code(404).send({
+          error: 'Not Found',
+          message: `Paper ${paperId} not found`,
+        });
       }
-      
+
+      const paper = paperData.paper;
+
       // Generate script using LLM
       const llm = getLLMProvider();
-      const prompt = PODCAST_SCRIPT(paper, duration);
-      
+      const prompt = PODCAST_SCRIPT(paper, 180);
+
       const script = await llm.chat(
         [{ role: 'user', content: prompt }],
         { maxTokens: 1500, temperature: 0.7 }
       );
-      
+
       log.info(`Generated podcast script (${script.length} chars)`);
-      
+
       // Generate audio with ElevenLabs
       if (!env.ELEVENLABS_API_KEY) {
         // Return script only if no TTS key
         log.warn('ELEVENLABS_API_KEY not set, returning script only');
         return reply.send({
           url: 'script-only',
-          bytesLength: script.length,
-          script,
         });
       }
-      
+
       const audioBuffer = await generateAudio(script);
-      
+
       // Save audio file
-      const audioPath = join(env.DATA_DIR, 'audio', `${paperId}.mp3`);
+      const audioPath = join(store.getAudioDir(), `${paperId}.mp3`);
       await writeFile(audioPath, audioBuffer);
-      
-      const response: PodcastResponse = {
-        url: audioPath,
-        bytesLength: audioBuffer.length,
-      };
-      
+
       log.info(`Podcast saved to ${audioPath} (${audioBuffer.length} bytes)`);
-      
-      return reply.send(response);
+
+      return reply.send({
+        url: `/audio/${paperId}.mp3`,
+      });
     } catch (error) {
       log.error('Podcast generation failed', error);
-      return reply.code(500).send({ error: String(error) });
+      return reply.code(500).send({
+        error: 'Internal Server Error',
+        message: String(error),
+      });
     }
   });
 }
@@ -95,11 +116,11 @@ async function generateAudio(text: string): Promise<Buffer> {
       },
     }),
   });
-  
+
   if (!response.ok) {
     throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
   }
-  
+
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }

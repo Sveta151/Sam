@@ -6,6 +6,7 @@ import { useStore } from '@/lib/store';
 import { FolderTree } from '@/components/folder-tree';
 import { PlaylistThree } from '@/components/playlist-three';
 import { PaperCard } from '@/components/paper-card';
+import { UploadDropzone } from '@/components/upload-dropzone';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -220,6 +221,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               />
             </div>
 
+            {/* Supabase Upload Dropzone */}
+            <UploadDropzone 
+              projectId={project.id} 
+              folderId={selectedFolderId}
+              onUploadComplete={() => {
+                // TODO: Refresh papers list from Supabase
+                toast.success('Paper uploaded! Refresh to see it.');
+              }}
+            />
+
             {visiblePapers.length > 0 ? (
               <div className="space-y-3">
                 {visiblePapers.map((paper) => (
@@ -299,6 +310,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+
+            {/* Supabase Upload Dropzone */}
+            <UploadDropzone 
+              projectId={project.id} 
+              folderId=""
+              onUploadComplete={() => {
+                // TODO: Refresh papers list from Supabase
+                toast.success('Paper uploaded! Refresh to see it.');
+              }}
+            />
 
             {visiblePapers.length > 0 ? (
               <div className="space-y-3">

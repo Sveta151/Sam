@@ -21,8 +21,9 @@ const envSchema = z.object({
   LLM_PROVIDER: z.enum(['anthropic', 'groq']).default('anthropic'),
   
   // Server config
-  PORT: z.string().default('3001'),
+  PORT: z.string().default('8787'),
   HOST: z.string().default('0.0.0.0'),
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
   
   // Data paths
   DATA_DIR: z.string().default('./data'),
