@@ -1,0 +1,12 @@
+Project: Sam Hackathon – Frontend
+
+Rules:
+- Do not create tests unless explicitly asked.
+- After each edit, re-check imports and function signatures.
+- Keep the Next.js setup minimal (App Router, TypeScript, no heavy UI libs unless requested).
+- Prefer absolute paths for tool calls and file references.
+- Long-running dev servers should run in the background.
+- Use commit messages that include the AI marker suffix: [ai:y].
+- Keep UI clean and modern; dark theme by default.
+- Avoid adding bloat (Tailwind/shadcn/etc.) unless requested.
+- For Git pushes, prefer HTTPS with short-lived PAT when SSH is unavailable.
