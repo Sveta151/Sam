@@ -39,9 +39,9 @@ export default function TinderPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-screen-md lg:max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Button
             variant="ghost"
             size="icon"
@@ -50,22 +50,24 @@ export default function TinderPage() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Paper Discovery</h1>
-          <p className="text-sm text-muted-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold">Paper Discovery</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {feedToShow.length} papers to review
             </p>
           </div>
         </div>
 
         {/* Swipe Deck */}
-      <SwipeDeck papers={feedToShow} />
+        <div className="-mx-2 sm:mx-0">
+          <SwipeDeck papers={feedToShow} />
+        </div>
 
         {/* Instructions */}
-        <div className="mt-8 text-center space-y-2">
-          <p className="text-sm text-muted-foreground">
+        <div className="mt-6 sm:mt-8 text-center space-y-2">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Swipe left to skip • Swipe right to save
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] sm:text-xs text-muted-foreground">
             Or use the buttons below
           </p>
         </div>

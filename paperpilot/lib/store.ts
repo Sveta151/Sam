@@ -119,11 +119,17 @@ export const useStore = create<StoreState>()(
               sizeBytes: file.size,
             });
 
-            // Persist a data URL asynchronously (best-effort)
+            // Persist a data URL asynchronously for in-session preview only.
+            // Guard against exceeding localStorage quota by stripping heavy fields during persistence (see partialize below)
             fileToDataUrl(file).then((dataUrl) => {
-              set((inner) => ({
-                papers: inner.papers.map((p) => (p.id === id ? { ...p, fileDataUrl: dataUrl } : p)),
-              }));
+              try {
+                set((inner) => ({
+                  papers: inner.papers.map((p) => (p.id === id ? { ...p, fileDataUrl: dataUrl } : p)),
+                }));
+              } catch (err) {
+                // QuotaExceeded or other storage errors should not break uploads; keep working without persisted previews
+                console.warn('[paperpilot] Skipping persisted preview due to storage error', err);
+              }
             });
           });
 
@@ -322,6 +328,14 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'paperpilot-storage',
+      // Exclude large/ephemeral fields from persistence to avoid localStorage quota issues
+      partialize: (state) => ({
+        projects: state.projects,
+        folders: state.folders,
+        recs: state.recs,
+        reads: state.reads,
+        papers: state.papers.map(({ fileDataUrl, fileUrl, ...rest }) => rest),
+      }),
     }
   )
 );

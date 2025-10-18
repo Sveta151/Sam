@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { SwipeDeck } from '@/components/swipe-deck';
 import { StreakWidget } from '@/components/streak-widget';
 import { NudgeCard } from '@/components/nudge-card';
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { PaperCard } from '@/components/paper-card';
@@ -16,11 +16,73 @@ export default function HomePage() {
   const papers = useStore((state) => state.papers);
   const recs = useStore((state) => state.recs);
   const [query, setQuery] = useState('');
+  const [remoteResults, setRemoteResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   
   useEffect(() => {
     setIsHydrated(true);
   }, []);
   
+  // Simple local search with mock external results when no local matches
+  const normalized = query.trim().toLowerCase();
+  const localMatches = normalized
+    ? papers.filter((p) => `${p.title} ${(p.authors||[]).join(' ')} ${(p.labels||[]).join(' ')}`.toLowerCase().includes(normalized))
+    : [];
+
+  // Debounced remote search against backend when there are no local matches
+  useEffect(() => {
+    if (!normalized) {
+      setRemoteResults([]);
+      setSearchError(null);
+      if (abortRef.current) abortRef.current.abort();
+      return;
+    }
+
+    const handle = setTimeout(async () => {
+      // If we already have local matches, prefer them and skip remote
+      if (localMatches.length > 0) {
+        setRemoteResults([]);
+        setSearchError(null);
+        return;
+      }
+
+      setIsSearching(true);
+      setSearchError(null);
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            tool: 'exa',
+            tool_kwargs: { count: 2 },
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Search failed');
+        }
+        const json = await res.json();
+        const results = Array.isArray(json?.results) ? json.results : [];
+        setRemoteResults(results);
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        setRemoteResults([]);
+        setSearchError(String(err?.message || err));
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(handle);
+  }, [normalized, query, localMatches.length]);
+
   const tinderFeed = useMemo(() => {
     const tinderRecs = recs
       .filter((r) => (r.source === 'tinder' || r.source === 'hot'))
@@ -46,8 +108,8 @@ export default function HomePage() {
 
   if (!isHydrated) {
     return (
-      <div className="content-grid">
-        <div className="col-span-7">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-4 sm:p-6 max-w-screen-2xl mx-auto">
+        <div className="col-span-12 md:col-span-7">
           <div className="space-y-6">
             <div>
               <h1 className="text-3xl font-bold mb-2">Discover Papers</h1>
@@ -57,7 +119,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-        <div className="col-span-5 space-y-6">
+        <div className="col-span-12 md:col-span-5 space-y-6">
           <div className="h-32 bg-muted animate-pulse rounded-lg" />
           <div className="h-32 bg-muted animate-pulse rounded-lg" />
         </div>
@@ -65,22 +127,9 @@ export default function HomePage() {
     );
   }
 
-  // Simple local search with mock external results when no local matches
-  const normalized = query.trim().toLowerCase();
-  const localMatches = normalized
-    ? papers.filter((p) => `${p.title} ${(p.authors||[]).join(' ')} ${(p.labels||[]).join(' ')}`.toLowerCase().includes(normalized))
-    : [];
-
-  const mockResults = normalized && localMatches.length === 0
-    ? [
-        { id: 'mock-1', title: `Mock result for "${query}"`, authors: ['Doe, J.'], summary2: 'This is a mocked search result. Backend TBD.' },
-        { id: 'mock-2', title: `Another ${query} paper`, authors: ['Roe, R.'], summary2: 'Second mocked item for demo.' },
-      ]
-    : [];
-
   if (normalized) {
     return (
-      <div className="content-grid">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-4 sm:p-6 max-w-screen-2xl mx-auto">
         <div className="col-span-12 mb-4">
           <Input
             placeholder="Search papers (title, author, labels)..."
@@ -98,14 +147,52 @@ export default function HomePage() {
             </div>
           ) : (
             <Card className="p-4 border-border/40">
-              <div className="text-sm text-muted-foreground mb-2">No local matches. Mock results:</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-muted-foreground">
+                  {isSearching ? 'Searching...' : 'Results from remote search'}
+                </div>
+                {remoteResults.length > 0 && (
+                  <div className="text-xs text-muted-foreground">{remoteResults.length} results</div>
+                )}
+              </div>
+              {searchError && (
+                <div className="text-xs text-red-500 mb-2">{searchError}</div>
+              )}
               <div className="space-y-2">
-                {mockResults.map((m) => (
-                  <div key={m.id} className="p-3 rounded-lg bg-secondary">
-                    <div className="font-medium">{m.title}</div>
-                    <div className="text-xs text-muted-foreground">{m.summary2}</div>
-                  </div>
-                ))}
+                {remoteResults.slice(0, 10).map((r, idx) => {
+                  const paper = r?.paper || {};
+                  const title = r?.title || paper?.title || r?.paperTitle || 'Untitled';
+                  const authorsRaw = r?.authors || r?.paperAuthors || paper?.authors || paper?.paperAuthors || [];
+                  const authors = Array.isArray(authorsRaw)
+                    ? authorsRaw.map((a: any) => (typeof a === 'string' ? a : a?.name || a?.user?.fullname || a?.user?.name || '')).filter(Boolean)
+                    : (typeof authorsRaw === 'string' ? [authorsRaw] : []);
+                  const summary = r?.summary || r?.highlights || paper?.summary || paper?.highlights || '';
+                  const links = r?.links || paper?.links || {};
+                  const primaryUrl = links?.arxiv || links?.huggingface || links?.source || links?.pdf || links?.github;
+                  return (
+                    <div key={r?.id || r?.paperId || paper?.id || idx} className="p-3 rounded-lg bg-secondary">
+                      <div className="font-medium flex items-center gap-2">
+                        <a
+                          href={primaryUrl || '#'}
+                          target={primaryUrl ? '_blank' : '_self'}
+                          rel="noreferrer"
+                          className="hover:underline"
+                        >
+                          {title}
+                        </a>
+                      </div>
+                      {authors.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-0.5">{authors.join(', ')}</div>
+                      )}
+                      {summary && (
+                        <div className="text-xs text-muted-foreground mt-2 line-clamp-3">{summary}</div>
+                      )}
+                    </div>
+                  );
+                })}
+                {!isSearching && !searchError && remoteResults.length === 0 && (
+                  <div className="text-xs text-muted-foreground">No results found.</div>
+                )}
               </div>
             </Card>
           )}
@@ -115,7 +202,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="content-grid">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-4 sm:p-6 max-w-screen-2xl mx-auto">
       {/* Full-width search */}
       <div className="col-span-12 mb-4">
         <Input
@@ -126,7 +213,7 @@ export default function HomePage() {
         />
       </div>
       {/* Center: Tinder Deck (spans 7 columns) */}
-      <div className="col-span-7">
+      <div className="col-span-12 md:col-span-7">
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold mb-2">Discover Papers</h1>
@@ -144,7 +231,7 @@ export default function HomePage() {
       </div>
 
       {/* Right: Nudges & Streaks (spans 5 columns) */}
-      <div className="col-span-5 space-y-6">
+      <div className="col-span-12 md:col-span-5 space-y-6">
         <NudgeCard />
         <StreakWidget variant="full" />
       </div>
