@@ -1,7 +1,7 @@
 # Sam
 
 ## Repository overview
-This repo is a small monorepo for the Sam hackathon project. It brings together a minimal Next.js frontend, a lightweight TypeScript backend for PDF/RAG/LLM operations, a set of Python helpers for paper discovery, and a simple browser extension.
+This repo is a small monorepo for the Sam hackathon project. It brings together a minimal Next.js frontend, a lightweight TypeScript backend for PDF/RAG/LLM operations, a set of Python helpers for paper discovery, and a simple browser extension. 
 
 ## Structure
 ```
