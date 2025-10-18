@@ -5,6 +5,8 @@ import asyncio
 import logging
 from time import perf_counter
 import os
+import hashlib
+import json
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -32,6 +34,129 @@ if not _logger.handlers:
     _handler.setFormatter(_formatter)
     _logger.addHandler(_handler)
 _logger.setLevel(logging.INFO)
+
+# Unified query-level cache for final results
+_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache", "unified")
+_TREND_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache", "trend")
+
+
+def _ensure_cache_dir() -> None:
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+    except Exception:
+        pass
+
+
+def _ensure_trend_cache_dir() -> None:
+    try:
+        os.makedirs(_TREND_CACHE_DIR, exist_ok=True)
+    except Exception:
+        pass
+
+
+def _cache_key(query: str, limit: int) -> str:
+    # Stable hash based on query and limit
+    raw = f"v1|{query}|{limit}".encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _cache_path(query: str, limit: int) -> str:
+    return os.path.join(_CACHE_DIR, f"{_cache_key(query, limit)}.json")
+
+
+def _read_unified_cache(query: str, limit: int) -> Optional[Dict[str, Any]]:
+    try:
+        _ensure_cache_dir()
+        fp = _cache_path(query, limit)
+        if not os.path.exists(fp):
+            return None
+        with open(fp, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # Minimal validation
+        if not isinstance(data, dict) or "results" not in data or "count" not in data:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _write_unified_cache(query: str, limit: int, payload: Dict[str, Any]) -> None:
+    try:
+        _ensure_cache_dir()
+        fp = _cache_path(query, limit)
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except Exception:
+        # Best-effort cache
+        pass
+
+
+def _trend_cache_key(
+    period: str,
+    date: Optional[str],
+    end_date: Optional[str],
+    days: Optional[int],
+    limit: Optional[int],
+) -> str:
+    # Normalize all parts to strings for a stable key
+    parts = [
+        "trend_v1",
+        str(period or ""),
+        str(date) if date is not None else "None",
+        str(end_date) if end_date is not None else "None",
+        str(days) if days is not None else "None",
+        str(limit) if limit is not None else "None",
+    ]
+    raw = "|".join(parts).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _trend_cache_path(
+    period: str,
+    date: Optional[str],
+    end_date: Optional[str],
+    days: Optional[int],
+    limit: Optional[int],
+) -> str:
+    return os.path.join(_TREND_CACHE_DIR, f"{_trend_cache_key(period, date, end_date, days, limit)}.json")
+
+
+def _read_trend_cache(
+    period: str,
+    date: Optional[str],
+    end_date: Optional[str],
+    days: Optional[int],
+    limit: Optional[int],
+) -> Optional[Dict[str, Any]]:
+    try:
+        _ensure_trend_cache_dir()
+        fp = _trend_cache_path(period, date, end_date, days, limit)
+        if not os.path.exists(fp):
+            return None
+        with open(fp, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or "results" not in data or "count" not in data or "period" not in data:
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _write_trend_cache(
+    period: str,
+    date: Optional[str],
+    end_date: Optional[str],
+    days: Optional[int],
+    limit: Optional[int],
+    payload: Dict[str, Any],
+) -> None:
+    try:
+        _ensure_trend_cache_dir()
+        fp = _trend_cache_path(period, date, end_date, days, limit)
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+    except Exception:
+        pass
 
 # Register Exa tool (requires EXA_API_KEY in the environment)
 if os.environ.get("EXA_API_KEY"):
@@ -469,6 +594,12 @@ async def search(req: SearchRequest) -> SearchResponse:
         t0 = perf_counter()
         _logger.info("search phase=start query='%s' limit=%s", query, limit)
 
+        # Try unified cache first
+        cached = _read_unified_cache(query, limit)
+        if cached is not None:
+            _logger.info("search phase=cache_hit query='%s' limit=%s count=%d", query, limit, int(cached.get("count", 0)))
+            return SearchResponse(count=int(cached.get("count", 0)), results=[UnifiedItem(**r) for r in (cached.get("results") or [])])
+
         # Run providers in parallel
         exa_task = _fetch_exa_async(query, limit)
         # Google Scholar temporarily disabled for speed; uncomment to re-enable
@@ -501,7 +632,9 @@ async def search(req: SearchRequest) -> SearchResponse:
             sum(len(chunk) for chunk in results if isinstance(chunk, list)),
             len(final_results),
         )
-        return SearchResponse(count=len(final_results), results=[UnifiedItem(**r) for r in final_results])
+        response_payload = {"count": len(final_results), "results": final_results}
+        _write_unified_cache(query, limit, response_payload)
+        return SearchResponse(count=response_payload["count"], results=[UnifiedItem(**r) for r in response_payload["results"]])
     except Exception as exc:
         _logger.exception("search phase=error error=%s", exc)
         raise HTTPException(status_code=400, detail=str(exc))
@@ -525,6 +658,10 @@ def trend(
       - limit: truncate results to first N
     """
     try:
+        # Cache lookup
+        cached = _read_trend_cache(period, date, end_date, days, limit)
+        if cached is not None:
+            return cached
         period_value = (period or "").lower()
         if period_value not in {"daily", "weekly", "monthly"}:
             raise HTTPException(status_code=400, detail="Invalid period. Use 'daily', 'weekly', or 'monthly'.")
@@ -548,7 +685,9 @@ def trend(
 
         if limit is not None and limit >= 0:
             results = results[:limit]
-        return {"period": period_value, "count": len(results), "results": results}
+        payload = {"period": period_value, "count": len(results), "results": results}
+        _write_trend_cache(period, date, end_date, days, limit, payload)
+        return payload
     except HTTPException:
         raise
     except Exception as exc:
