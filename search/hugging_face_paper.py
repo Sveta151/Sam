@@ -18,7 +18,9 @@ def fetch_daily_papers(date: Optional[str] = None):
     resp = requests.get(url, params=params, timeout=30)
     resp.raise_for_status()
     papers = resp.json()
-    return papers
+    # Normalize to the simplified structure requested by the application and sort by upvotes desc
+    normalized = [_normalize_record(item) for item in papers]
+    return sort_by_upvotes(normalized)
 
 
 def _resolve_target_date(target: Optional[str]) -> date:
@@ -98,14 +100,111 @@ def _attach_links(record: dict) -> dict:
     return enriched
 
 
+def _normalize_record(record: dict) -> dict:
+    """Return a simplified view containing only the requested fields.
+
+    Fields returned:
+      - authors: list of author names, preferring user.fullname when available
+      - title: title of the paper
+      - publishedAt: ISO datetime when it was published
+      - summary: summary/highlights text
+      - upvotes: number of upvotes
+      - githubrepo: canonical GitHub repo URL if present
+      - ai_keywords: list of AI keywords
+      - githubstart: GitHub star count (if provided by source)
+    """
+    paper_details = record.get("paper") or {}
+
+    # Title
+    title = (
+        record.get("title")
+        or paper_details.get("title")
+        or record.get("paperTitle")
+        or paper_details.get("paperTitle")
+        or "Untitled"
+    )
+
+    # Authors (prefer fullname from nested user if available)
+    authors_raw = (
+        record.get("authors")
+        or record.get("paperAuthors")
+        or paper_details.get("authors")
+        or paper_details.get("paperAuthors")
+        or []
+    )
+    authors_list: list[str] = []
+    if isinstance(authors_raw, str):
+        authors_list = [authors_raw]
+    elif isinstance(authors_raw, Iterable):
+        for author in authors_raw:
+            if isinstance(author, str):
+                authors_list.append(author)
+            elif isinstance(author, dict):
+                name = author.get("name")
+                if not name and isinstance(author.get("user"), dict):
+                    user = author["user"]
+                    name = user.get("fullname") or user.get("name") or user.get("user")
+                if name:
+                    authors_list.append(name)
+
+    # Published date
+    published_at = (
+        record.get("publishedAt")
+        or record.get("date")
+        or paper_details.get("publishedAt")
+        or paper_details.get("date")
+        or None
+    )
+
+    # Summary/highlights
+    summary = (
+        record.get("summary")
+        or record.get("highlights")
+        or paper_details.get("summary")
+        or paper_details.get("highlights")
+        or None
+    )
+
+    # Upvotes
+    upvotes = record.get("upvotes")
+    if upvotes is None:
+        upvotes = paper_details.get("upvotes")
+
+    # GitHub repo (normalize to full URL)
+    github_repo_raw = paper_details.get("githubRepo") or record.get("githubRepo")
+    githubrepo = None
+    if github_repo_raw:
+        repo_str = str(github_repo_raw)
+        githubrepo = repo_str if repo_str.startswith(("http://", "https://")) else f"https://github.com/{repo_str}"
+
+    # AI keywords
+    ai_keywords = paper_details.get("ai_keywords") or record.get("ai_keywords") or []
+    if not isinstance(ai_keywords, list):
+        ai_keywords = [str(ai_keywords)]
+
+    # GitHub stars (map to requested field name 'githubstart')
+    githubstart = paper_details.get("githubStars") or record.get("githubStars")
+
+    return {
+        "authors": authors_list,
+        "title": title,
+        "publishedAt": published_at,
+        "summary": summary,
+        "upvotes": upvotes,
+        "githubrepo": githubrepo,
+        "ai_keywords": ai_keywords,
+        "githubstart": githubstart,
+    }
+
+
 def fetch_weekly_papers(end_date: Optional[str] = None, *, days: int = 7) -> list[dict]:
     """Fetch papers for the trailing window ending at `end_date` (inclusive)."""
-    return _fetch_papers_for_window(days=days, end_date=end_date)
+    return sort_by_upvotes(_fetch_papers_for_window(days=days, end_date=end_date))
 
 
 def fetch_monthly_papers(end_date: Optional[str] = None, *, days: int = 30) -> list[dict]:
     """Fetch papers for roughly the past month ending at `end_date` (inclusive)."""
-    return _fetch_papers_for_window(days=days, end_date=end_date)
+    return sort_by_upvotes(_fetch_papers_for_window(days=days, end_date=end_date))
 
 
 def sort_by_upvotes(papers: Iterable[dict]) -> list[dict]:
