@@ -1,0 +1,17 @@
+mcp>=0.1.0; python_version >= "3.10"
+# python-dotenv for py37
+python-dotenv>=0.20,<0.22; python_version < "3.8"
+# python-dotenv for py38+
+python-dotenv>=1.0.1; python_version >= "3.8"
+# FastAPI for py37
+fastapi==0.95.2; python_version < "3.8"
+# FastAPI for py38+
+fastapi>=0.115.0; python_version >= "3.8"
+# Uvicorn for py37
+uvicorn[standard]==0.21.1; python_version < "3.8"
+# Uvicorn for py38+
+uvicorn[standard]>=0.30.0; python_version >= "3.8"
+requests>=2.31.0,<2.32; python_version < "3.8"
+requests>=2.32.3; python_version >= "3.8"
+exa-py>=1.1.3; python_version >= "3.8"
+
