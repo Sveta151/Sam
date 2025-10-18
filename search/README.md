@@ -162,6 +162,35 @@ Notes:
 - Weekly/monthly helpers fetch trailing windows ending at optional `end_date` (inclusive) and results are sorted by `upvotes` descending.
 - When persisting via `save_papers_as_json(..., include_links=true)`, best‑effort `links` are attached (e.g., `arxiv`, `huggingface`, `source`, `pdf`, `github`).
 
+### Hugging Face details
+
+Normalization and utilities from `hugging_face_paper.py`:
+
+- `fetch_daily_papers(date?: YYYY-MM-DD)` → returns normalized records sorted by upvotes
+- `fetch_weekly_papers(end_date?: YYYY-MM-DD, days: int = 7)` → trailing window ending at `end_date` (inclusive)
+- `fetch_monthly_papers(end_date?: YYYY-MM-DD, days: int = 30)` → trailing window ending at `end_date` (inclusive)
+- `sort_by_upvotes(records)` → helper to sort any HF list by `upvotes` desc
+- `format_papers(records)` → multi-line human-readable list for console output
+- `save_papers_as_json(records, path, include_links: bool = False)` → pretty JSON to disk; if `include_links` is true, attaches link map
+
+Link resolution with `include_links=true` uses best-effort keys:
+
+- `arxiv` — `https://arxiv.org/abs/{id}` when the paper id matches arXiv patterns
+- `huggingface` — `https://huggingface.co/papers/{id}` when `paper.id` is present
+- `source` — original source URL if provided by Hugging Face payload
+- `pdf` — direct PDF URL when available
+- `github` — canonical `https://github.com/{org}/{repo}` derived from repo hint
+
+Saving examples:
+
+```python
+from pathlib import Path
+from search.hugging_face_paper import fetch_daily_papers, save_papers_as_json
+
+papers = fetch_daily_papers()
+save_papers_as_json(papers, Path("search/data") / "huggingface_daily_papers.json", include_links=True)
+```
+
 - MCP arXiv / Google Scholar:
 
 ```json
